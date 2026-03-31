@@ -13,9 +13,35 @@ void StreamWeaverInputStream::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_input_name", "input_name"), &StreamWeaverInputStream::SetInputName);
 	ClassDB::bind_method(D_METHOD("get_audio_stream"), &StreamWeaverInputStream::GetAudioStream);
 	ClassDB::bind_method(D_METHOD("set_audio_stream", "audio_stream"), &StreamWeaverInputStream::SetAudioStream);
+    ClassDB::bind_method(D_METHOD("get_graph_node_position"), &StreamWeaverInputStream::GetGraphNodePosition);
+    ClassDB::bind_method(D_METHOD("set_graph_node_position", "graph_node_position"), &StreamWeaverInputStream::SetGraphNodePosition);
+
 
 	ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "input_name"), "set_input_name", "get_input_name");
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "audio_stream", PROPERTY_HINT_RESOURCE_TYPE, "AudioStream"), "set_audio_stream", "get_audio_stream");
+    ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "graph_node_position"), "set_graph_node_position", "get_graph_node_position");
+}
+
+// -------------------- StreamWeaverParameter --------------------
+void StreamWeaverParameter::_bind_methods() {
+    ClassDB::bind_method(D_METHOD("get_parameter_name"), &StreamWeaverParameter::GetParameterName);
+    ClassDB::bind_method(D_METHOD("set_parameter_name", "parameter_name"), &StreamWeaverParameter::SetParameterName);
+    ClassDB::bind_method(D_METHOD("get_graph_node_position"), &StreamWeaverParameter::GetGraphNodePosition);
+    ClassDB::bind_method(D_METHOD("set_graph_node_position", "graph_node_position"), &StreamWeaverParameter::SetGraphNodePosition);
+
+    ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "parameter_name"), "set_parameter_name", "get_parameter_name");
+    ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "graph_node_position"), "set_graph_node_position", "get_graph_node_position");
+}
+
+// -------------------- StreamWeaverTrigger --------------------
+void StreamWeaverTrigger::_bind_methods() {
+    ClassDB::bind_method(D_METHOD("get_trigger_name"), &StreamWeaverTrigger::GetTriggerName);
+    ClassDB::bind_method(D_METHOD("set_trigger_name", "trigger_name"), &StreamWeaverTrigger::SetTriggerName);
+    ClassDB::bind_method(D_METHOD("get_graph_node_position"), &StreamWeaverTrigger::GetGraphNodePosition);
+    ClassDB::bind_method(D_METHOD("set_graph_node_position", "graph_node_position"), &StreamWeaverTrigger::SetGraphNodePosition);
+
+    ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "trigger_name"), "set_trigger_name", "get_trigger_name");
+    ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "graph_node_position"), "set_graph_node_position", "get_graph_node_position");
 }
 
 // -------------------- ParameterCondition --------------------
@@ -32,14 +58,14 @@ void ParameterConditionComparison::_bind_methods() {
 	BIND_ENUM_CONSTANT(GTE);
 	BIND_ENUM_CONSTANT(NEQ);
 
-	ClassDB::bind_method(D_METHOD("get_parameter_name"), &ParameterConditionComparison::GetParameterName);
-	ClassDB::bind_method(D_METHOD("set_parameter_name", "parameter_name"), &ParameterConditionComparison::SetParameterName);
+	ClassDB::bind_method(D_METHOD("get_parameter"), &ParameterConditionComparison::GetParameter);
+	ClassDB::bind_method(D_METHOD("set_parameter", "parameter"), &ParameterConditionComparison::SetParameter);
 	ClassDB::bind_method(D_METHOD("get_comparison_type"), &ParameterConditionComparison::GetComparisonType);
 	ClassDB::bind_method(D_METHOD("set_comparison_type", "comparison_type"), &ParameterConditionComparison::SetComparisonType);
 	ClassDB::bind_method(D_METHOD("get_value"), &ParameterConditionComparison::GetValue);
 	ClassDB::bind_method(D_METHOD("set_value", "value"), &ParameterConditionComparison::SetValue);
 
-	ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "parameter_name"), "set_parameter_name", "get_parameter_name");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "parameter", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverParameter"), "set_parameter", "get_parameter");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "comparison_type", PROPERTY_HINT_ENUM, "EQ,LT,GT,LTE,GTE,NEQ"), "set_comparison_type", "get_comparison_type");
 
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "value"), "set_value", "get_value");
@@ -47,14 +73,14 @@ void ParameterConditionComparison::_bind_methods() {
 
 // -------------------- ParameterConditionRange --------------------
 void ParameterConditionRange::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("get_parameter_name"), &ParameterConditionRange::GetParameterName);
-	ClassDB::bind_method(D_METHOD("set_parameter_name", "parameter_name"), &ParameterConditionRange::SetParameterName);
+	ClassDB::bind_method(D_METHOD("get_parameter"), &ParameterConditionRange::GetParameter);
+	ClassDB::bind_method(D_METHOD("set_parameter", "parameter"), &ParameterConditionRange::SetParameter);
 	ClassDB::bind_method(D_METHOD("get_min_value"), &ParameterConditionRange::GetMinValue);
 	ClassDB::bind_method(D_METHOD("set_min_value", "min_value"), &ParameterConditionRange::SetMinValue);
 	ClassDB::bind_method(D_METHOD("get_max_value"), &ParameterConditionRange::GetMaxValue);
 	ClassDB::bind_method(D_METHOD("set_max_value", "max_value"), &ParameterConditionRange::SetMaxValue);
 
-	ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "parameter_name"), "set_parameter_name", "get_parameter_name");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "parameter", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverParameter"), "set_parameter", "get_parameter");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "min_value"), "set_min_value", "get_min_value");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "max_value"), "set_max_value", "get_max_value");
 }
@@ -67,15 +93,19 @@ void StreamWeaverOutput::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_triggered_by", "triggered_by"), &StreamWeaverOutput::SetTriggeredBy);
 	ClassDB::bind_method(D_METHOD("get_output_name"), &StreamWeaverOutput::GetOutputName);
 	ClassDB::bind_method(D_METHOD("set_output_name", "output_name"), &StreamWeaverOutput::SetOutputName);
+    ClassDB::bind_method(D_METHOD("get_graph_node_position"), &StreamWeaverOutput::GetGraphNodePosition);
+    ClassDB::bind_method(D_METHOD("set_graph_node_position", "graph_node_position"), &StreamWeaverOutput::SetGraphNodePosition);
+
 	
 	ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "output_name"), "set_output_name", "get_output_name");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "conditions", PROPERTY_HINT_ARRAY_TYPE, "ParameterCondition"), "set_conditions", "get_conditions");
-	ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "triggered_by"), "set_triggered_by", "get_triggered_by");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "triggered_by", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverTrigger"), "set_triggered_by", "get_triggered_by");
+	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "graph_node_position"), "set_graph_node_position", "get_graph_node_position");
 }
 
-bool StreamWeaverOutput::should_trigger(StringName on_trigger, const HashMap<StringName, float> &parameters) {
+bool StreamWeaverOutput::should_trigger(StringName trigger, const HashMap<StringName, float> &parameters) {
 	PROFILE_FUNCTION();
-	if (on_trigger != triggered_by)
+	if (trigger != triggered_by->GetTriggerName())
 		return false;
 	for (int i = 0; i < conditions.size(); ++i) {
 		const auto condition = cast_to<ParameterCondition>(conditions[i]);
@@ -99,15 +129,15 @@ void StreamWeaverOutputRandomize::_bind_methods() {
 
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "randomize_pitch"), "set_randomize_pitch", "get_randomize_pitch");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "randomize_volume"), "set_randomize_volume", "get_randomize_volume");
-	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "input_streams", PROPERTY_HINT_ARRAY_TYPE, "StringName"), "set_input_streams", "get_input_streams");
+	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "input_streams", PROPERTY_HINT_ARRAY_TYPE, "StreamWeaverInputStream"), "set_input_streams", "get_input_streams");
 }
 
 class ParameterizedOutputRandomizeRuntimeInstance : public StreamWeaverOutputRuntimeInstanceBase {
 public:
-	float randomize_pitch;
-	float randomize_volume;
+	float randomize_pitch = 1;
+	float randomize_volume = 0;
 	Ref<RandomNumberGenerator> randomizer;
-	LocalVector<const StreamWeaverInputStream*> inputs;
+	LocalVector<Ref<StreamWeaverInputStream>> inputs;
 	int last_played_index = 0;
 
 	struct RuntimeInputData {
@@ -138,7 +168,7 @@ public:
 			return false;
 		}
 		PROFILE_FUNCTION();
-		int current_input_index = 0;
+		size_t current_input_index = 0;
 		while (current_input_index < currently_playing_inputs.size()) {
 			auto& cpi = currently_playing_inputs[current_input_index];
 			auto mixed_input = cpi.playback->mix_audio(cpi.pitch, p_frames);
@@ -164,15 +194,8 @@ StreamWeaverOutputRuntimeInstanceBase *StreamWeaverOutputRandomize::create_runti
 	auto* instance = new ParameterizedOutputRandomizeRuntimeInstance();
 	instance->randomize_pitch = randomize_pitch;
 	instance->randomize_volume = randomize_volume;
-	for (int i = 0; i < input_streams.size(); ++i) {
-		StringName input_stream_name = input_streams[i];
-		for (int input_index=0; input_index < from_playback.GetParent().GetInputs().size(); ++input_index) {
-			const auto input = cast_to<StreamWeaverInputStream>(from_playback.GetParent().GetInputs()[input_index]);
-			if (input->GetInputName() == input_stream_name) {
-				instance->inputs.push_back(input);
-				break;
-			}
-		}
+	for (Ref<StreamWeaverInputStream> input : input_streams) {
+        instance->inputs.push_back(input);
 	}
 	static int random_seed = 54631;
 	random_seed += 24462;
@@ -191,8 +214,8 @@ void StreamWeaverOutputLooping::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_input_stream"), &StreamWeaverOutputLooping::GetInputStream);
 	ClassDB::bind_method(D_METHOD("set_input_stream", "input_stream"), &StreamWeaverOutputLooping::SetInputStream);
 
-	ClassDB::bind_method(D_METHOD("get_modifying_parameter_name"), &StreamWeaverOutputLooping::GetModifyingParameterName);
-	ClassDB::bind_method(D_METHOD("set_modifying_parameter_name", "modifying_parameter_name"), &StreamWeaverOutputLooping::SetModifyingParameterName);
+	ClassDB::bind_method(D_METHOD("get_modifying_parameter"), &StreamWeaverOutputLooping::GetModifyingParameter);
+	ClassDB::bind_method(D_METHOD("set_modifying_parameter", "modifying_parameter"), &StreamWeaverOutputLooping::SetModifyingParameter);
 
 	ClassDB::bind_method(D_METHOD("get_min_volume"), &StreamWeaverOutputLooping::GetMinVolume);
 	ClassDB::bind_method(D_METHOD("set_min_volume", "min_volume"), &StreamWeaverOutputLooping::SetMinVolume);
@@ -219,7 +242,7 @@ void StreamWeaverOutputLooping::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_parameter_value_max_pitch", "parameter_value_max_pitch"), &StreamWeaverOutputLooping::SetParameterValueMaxPitch);
 
 	ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "input_stream"), "set_input_stream", "get_input_stream");
-	ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "modifying_parameter_name"), "set_modifying_parameter_name", "get_modifying_parameter_name");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "modifying_parameter", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverParameter"), "set_modifying_parameter", "get_modifying_parameter");
 
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "min_volume"), "set_min_volume", "get_min_volume");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "max_volume"), "set_max_volume", "get_max_volume");
@@ -268,8 +291,8 @@ void StreamWeaverAudioStream::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_outputs"), &StreamWeaverAudioStream::GetOutputs);
 	ClassDB::bind_method(D_METHOD("set_outputs", "outputs"), &StreamWeaverAudioStream::SetOutputs);
 
-	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "parameters", PROPERTY_HINT_ARRAY_TYPE, "StringName"), "set_parameters", "get_parameters");
-	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "triggers", PROPERTY_HINT_ARRAY_TYPE, "StringName"), "set_triggers", "get_triggers");
+	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "parameters", PROPERTY_HINT_ARRAY_TYPE, "StreamWeaverParameter"), "set_parameters", "get_parameters");
+	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "triggers", PROPERTY_HINT_ARRAY_TYPE, "StreamWeaverTrigger"), "set_triggers", "get_triggers");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "inputs", PROPERTY_HINT_ARRAY_TYPE, "StreamWeaverInputStream"), "set_inputs", "get_inputs");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "outputs", PROPERTY_HINT_ARRAY_TYPE, "StreamWeaverOutput"), "set_outputs", "get_outputs");
 }
@@ -288,7 +311,7 @@ godot::String StreamWeaverAudioStream::_get_stream_name() const {
 // -------------------- StreamWeaverAudioStreamPlayback --------------------
 void StreamWeaverAudioStreamPlayback::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_parameter", "parameter_name", "parameter_value"), &StreamWeaverAudioStreamPlayback::set_parameter);
-	ClassDB::bind_method(D_METHOD("trigger", "trigger_name"), &StreamWeaverAudioStreamPlayback::trigger);
+	ClassDB::bind_method(D_METHOD("trigger", "trigger"), &StreamWeaverAudioStreamPlayback::trigger);
 }
 
 StreamWeaverAudioStreamPlayback::~StreamWeaverAudioStreamPlayback() = default;
@@ -297,7 +320,10 @@ void StreamWeaverAudioStreamPlayback::initialize(godot::Ref<StreamWeaverAudioStr
 	PROFILE_FUNCTION();
 	parent_stream = parent;
 	for (int i = 0; i < parent->GetParameters().size(); ++i) {
-		parameters[parent->GetParameters()[i]] = 0;
+		const auto param = cast_to<StreamWeaverParameter>(parent->GetParameters()[i]);
+		if (param != nullptr) {
+			parameters[param->GetParameterName()] = 0;
+		}
 	}
 	for (int i = 0; i < parent->GetOutputs().size(); ++i) {
 		const auto output = cast_to<StreamWeaverOutput>(parent->GetOutputs()[i]);
@@ -313,10 +339,10 @@ void StreamWeaverAudioStreamPlayback::set_parameter(godot::StringName parameter_
 	parameters[parameter_name] = value;
 }
 
-void StreamWeaverAudioStreamPlayback::trigger(godot::StringName trigger_name) {
+void StreamWeaverAudioStreamPlayback::trigger(godot::StringName trigger) {
 	for (int i = 0; i < parent_stream->GetOutputs().size(); ++i) {
 		const auto output = cast_to<StreamWeaverOutput>(parent_stream->GetOutputs()[i]);
-		if (output->should_trigger(trigger_name, parameters)) {
+		if (output->should_trigger(trigger, parameters)) {
 			runtime_outputs[i]->triggered();
 		}
 	}

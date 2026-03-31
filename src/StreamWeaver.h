@@ -15,6 +15,8 @@ class StreamWeaverInputStream : public godot::Resource {
 
 	godot::StringName input_name;
 	godot::Ref<godot::AudioStream> audio_stream;
+
+    godot::Vector2 graph_node_position;
 public:
 	godot::StringName GetInputName() const { return input_name; }
 	void SetInputName(godot::StringName inputName) {
@@ -23,6 +25,39 @@ public:
 	}
 	godot::Ref<godot::AudioStream> GetAudioStream() const { return audio_stream; }
 	void SetAudioStream(godot::Ref<godot::AudioStream> audioStream) { audio_stream = audioStream; }
+    godot::Vector2 GetGraphNodePosition() const { return graph_node_position; }
+    void SetGraphNodePosition(godot::Vector2 graphNodePosition) { graph_node_position = graphNodePosition; }
+};
+
+class StreamWeaverParameter : public godot::Resource
+{
+    GDCLASS(StreamWeaverParameter, Resource)
+
+    static void _bind_methods();
+
+    godot::StringName parameter_name;
+    godot::Vector2 graph_node_position;
+public:
+    godot::StringName GetParameterName() const { return parameter_name; }
+    void SetParameterName(godot::StringName parameterName) { parameter_name = parameterName; }
+
+    godot::Vector2 GetGraphNodePosition() const { return graph_node_position; }
+    void SetGraphNodePosition(godot::Vector2 graphNodePosition) { graph_node_position = graphNodePosition; }
+};
+
+class StreamWeaverTrigger : public godot::Resource
+{
+    GDCLASS(StreamWeaverTrigger, Resource)
+
+    static void _bind_methods();
+
+    godot::StringName trigger_name;
+    godot::Vector2 graph_node_position;
+public:
+    godot::StringName GetTriggerName() const { return trigger_name; }
+    void SetTriggerName(godot::StringName triggerName) { trigger_name = triggerName; }
+    godot::Vector2 GetGraphNodePosition() const { return graph_node_position; }
+    void SetGraphNodePosition(godot::Vector2 graphNodePosition) { graph_node_position = graphNodePosition; }
 };
 
 class ParameterCondition : public godot::Resource {
@@ -44,13 +79,13 @@ public:
 		EQ, LT, GT, LTE, GTE, NEQ
 	};
 private:
-	godot::StringName parameter_name;
+	godot::Ref<StreamWeaverParameter> parameter;
 	Comparison comparison_type = EQ;
 	float value = 0;
 
 	void update_name() {
 		set_name(godot::vformat("%s %s %f",
-			parameter_name,
+			parameter.is_valid() ? parameter->GetParameterName() : godot::StringName("<null>"),
 			comparison_type == EQ ? "==" :
 			comparison_type == LT ? "<" :
 			comparison_type == GT ? ">" :
@@ -60,14 +95,14 @@ private:
 			value));
 	}
 public:
-	godot::StringName GetParameterName() const { return parameter_name; }
-	void SetParameterName(godot::StringName parameterName) { parameter_name = parameterName; update_name(); }
+	godot::Ref<StreamWeaverParameter> GetParameter() const { return parameter; }
+	void SetParameter(godot::Ref<StreamWeaverParameter> p) { parameter = p; update_name(); }
 	int GetComparisonType() const { return comparison_type; }
 	void SetComparisonType(int comparisonType) { comparison_type = static_cast<Comparison>(comparisonType); update_name(); }
 	float GetValue() const { return value; }
-	void SetValue(float value) { this->value = value; update_name(); }
+	void SetValue(float v) { this->value = v; update_name(); }
 	bool check(godot::StringName parameterName, float parameterValue) override {
-		if (parameterName == parameter_name) {
+		if (parameter.is_valid() && parameterName == parameter->GetParameterName()) {
 			switch (comparison_type) {
 				case EQ: return godot::Math::is_equal_approx(parameterValue, value);
 				case NEQ: return !godot::Math::is_equal_approx(parameterValue, value);
@@ -88,21 +123,21 @@ class ParameterConditionRange : public ParameterCondition {
 
 	static void _bind_methods();
 
-	godot::StringName parameter_name;
+	godot::Ref<StreamWeaverParameter> parameter;
 	float min_value = 0;
 	float max_value = 1;
 	void update_name() {
-		set_name(godot::vformat("%f <= %s >= %f", min_value, parameter_name, max_value));
+		set_name(godot::vformat("%f <= %s >= %f", min_value, parameter.is_valid() ? parameter->GetParameterName() : godot::StringName("<null>"), max_value));
 	}
 public:
-	godot::StringName GetParameterName() const { return parameter_name; }
-	void SetParameterName(godot::StringName parameterName) { parameter_name = parameterName; update_name(); }
+	godot::Ref<StreamWeaverParameter> GetParameter() const { return parameter; }
+	void SetParameter(godot::Ref<StreamWeaverParameter> p) { parameter = p; update_name(); }
 	float GetMinValue() const { return min_value; }
 	void SetMinValue(float minValue) { min_value = minValue; update_name(); }
 	float GetMaxValue() const { return max_value; }
 	void SetMaxValue(float maxValue) { max_value = maxValue; update_name(); }
 	bool check(godot::StringName parameterName, float parameterValue) override {
-		if (parameterName == parameter_name) {
+		if (parameter.is_valid() && parameterName == parameter->GetParameterName()) {
 			return parameterValue >= min_value && parameterValue <= max_value;
 		}
 		return true;
@@ -122,23 +157,32 @@ protected:
 	static void _bind_methods();
 	godot::StringName output_name;
 	godot::TypedArray<ParameterCondition> conditions;
-	godot::StringName triggered_by;
+	godot::Ref<StreamWeaverTrigger> triggered_by;
+
+    godot::Vector2 graph_node_position;
 
 	void update_name() {
-		set_name(godot::vformat("%s (%s)", output_name, triggered_by));
+		godot::StringName trigger_name = "None";
+		if (triggered_by.is_valid()) {
+			trigger_name = triggered_by->GetTriggerName();
+		}
+		set_name(godot::vformat("%s (%s)", output_name, trigger_name));
 	}
 public:
 	godot::StringName GetOutputName() const { return output_name; }
 	void SetOutputName(godot::StringName outputName) { output_name = outputName; update_name(); }
 	godot::TypedArray<ParameterCondition> GetConditions() const { return conditions; }
-	void SetConditions(godot::TypedArray<ParameterCondition> conditions) { this->conditions = conditions; }
-	godot::StringName GetTriggeredBy() const { return triggered_by; }
-	void SetTriggeredBy(godot::StringName triggeredBy) { triggered_by = triggeredBy; update_name(); }
+	void SetConditions(godot::TypedArray<ParameterCondition> c) { this->conditions = c; }
+	godot::Ref<StreamWeaverTrigger> GetTriggeredBy() const { return triggered_by; }
+	void SetTriggeredBy(godot::Ref<StreamWeaverTrigger> triggeredBy) { triggered_by = triggeredBy; update_name(); }
 
-	bool should_trigger(godot::StringName on_trigger, const godot::HashMap<godot::StringName, float>& parameters);
+	bool should_trigger(godot::StringName trigger, const godot::HashMap<godot::StringName, float>& parameters);
 
 	virtual StreamWeaverOutputRuntimeInstanceBase* create_runtime_instance(const StreamWeaverAudioStreamPlayback& from_playback) =0;
 	virtual void release_runtime_instance(StreamWeaverOutputRuntimeInstanceBase* instance) = 0;
+
+    godot::Vector2 GetGraphNodePosition() const { return graph_node_position; }
+    void SetGraphNodePosition(godot::Vector2 graphNodePosition) { graph_node_position = graphNodePosition; }
 };
 
 class StreamWeaverOutputRandomize : public StreamWeaverOutput {
@@ -148,14 +192,14 @@ class StreamWeaverOutputRandomize : public StreamWeaverOutput {
 
 	float randomize_pitch = 1;
 	float randomize_volume = 1;
-	godot::TypedArray<godot::StringName> input_streams;
+	godot::TypedArray<godot::Ref<StreamWeaverInputStream>> input_streams;
 public:
 	float GetRandomizePitch() const { return randomize_pitch; }
 	void SetRandomizePitch(float randomizePitch) { randomize_pitch = randomizePitch; }
 	float GetRandomizeVolume() const { return randomize_volume; }
 	void SetRandomizeVolume(float randomizeVolume) { randomize_volume = randomizeVolume; }
-	godot::TypedArray<godot::StringName> GetInputStreams() const { return input_streams; }
-	void SetInputStreams(godot::TypedArray<godot::StringName> inputStreams) { input_streams = inputStreams; }
+	godot::TypedArray<godot::Ref<StreamWeaverInputStream>> GetInputStreams() const { return input_streams; }
+	void SetInputStreams(godot::TypedArray<godot::Ref<StreamWeaverInputStream>> inputStreams) { input_streams = inputStreams; }
 
 	StreamWeaverOutputRuntimeInstanceBase *create_runtime_instance(const StreamWeaverAudioStreamPlayback &from_playback) override;
 	void release_runtime_instance(StreamWeaverOutputRuntimeInstanceBase *instance) override;
@@ -168,7 +212,7 @@ class StreamWeaverOutputLooping : public StreamWeaverOutput {
 
 
 	godot::StringName input_stream;
-	godot::StringName modifying_parameter_name;
+	godot::Ref<StreamWeaverParameter> modifying_parameter;
 	float min_volume = 0;
 	float max_volume = 0;
 	float parameter_value_min_volume;
@@ -180,8 +224,8 @@ class StreamWeaverOutputLooping : public StreamWeaverOutput {
 public:
 	godot::StringName GetInputStream() const { return input_stream; }
 	void SetInputStream(godot::StringName inputStream) { input_stream = inputStream; }
-	godot::StringName GetModifyingParameterName() const { return modifying_parameter_name; }
-	void SetModifyingParameterName(godot::StringName modifyingParameterName) { modifying_parameter_name = modifyingParameterName; }
+	godot::Ref<StreamWeaverParameter> GetModifyingParameter() const { return modifying_parameter; }
+	void SetModifyingParameter(godot::Ref<StreamWeaverParameter> modifyingParameter) { modifying_parameter = modifyingParameter; }
 	float GetMinVolume() const { return min_volume; }
 	void SetMinVolume(float minVolume) { min_volume = minVolume; }
 	float GetMaxVolume() const { return max_volume; }
@@ -211,10 +255,10 @@ class StreamWeaverAudioStream : public godot::AudioStream {
 
 	static void _bind_methods();
 
-	godot::TypedArray<godot::StringName> parameters;
-	godot::TypedArray<godot::StringName> triggers;
-	godot::TypedArray<StreamWeaverInputStream> inputs;
-	godot::TypedArray<StreamWeaverOutput> outputs;
+	godot::TypedArray<godot::Ref<StreamWeaverParameter>> parameters;
+	godot::TypedArray<godot::Ref<StreamWeaverTrigger>> triggers;
+	godot::TypedArray<godot::Ref<StreamWeaverInputStream>> inputs;
+	godot::TypedArray<godot::Ref<StreamWeaverOutput>> outputs;
 
 	int num_playbacks;
 
@@ -222,14 +266,14 @@ public:
 	godot::Ref<godot::AudioStreamPlayback> _instantiate_playback() const override;
 	godot::String _get_stream_name() const override;
 
-	godot::TypedArray<godot::StringName> GetParameters() const { return parameters; }
-	void SetParameters(godot::TypedArray<godot::StringName> parameters) { this->parameters = parameters; }
-	godot::TypedArray<godot::StringName> GetTriggers() const { return triggers; }
-	void SetTriggers(godot::TypedArray<godot::StringName> triggers) { this->triggers = triggers; }
-	godot::TypedArray<StreamWeaverInputStream> GetInputs() const { return inputs; }
-	void SetInputs(godot::TypedArray<StreamWeaverInputStream> inputs) { this->inputs = inputs; }
-	godot::TypedArray<StreamWeaverOutput> GetOutputs() const { return outputs; }
-	void SetOutputs(godot::TypedArray<StreamWeaverOutput> outputs) { this->outputs = outputs; }
+	godot::TypedArray<godot::Ref<StreamWeaverParameter>> GetParameters() const { return parameters; }
+	void SetParameters(godot::TypedArray<godot::Ref<StreamWeaverParameter>> p) { this->parameters = p; }
+	godot::TypedArray<godot::Ref<StreamWeaverTrigger>> GetTriggers() const { return triggers; }
+	void SetTriggers(godot::TypedArray<godot::Ref<StreamWeaverTrigger>> t) { this->triggers = t; }
+	godot::TypedArray<godot::Ref<StreamWeaverInputStream>> GetInputs() const { return inputs; }
+	void SetInputs(godot::TypedArray<godot::Ref<StreamWeaverInputStream>> inpt) { this->inputs = inpt; }
+	godot::TypedArray<godot::Ref<StreamWeaverOutput>> GetOutputs() const { return outputs; }
+	void SetOutputs(godot::TypedArray<godot::Ref<StreamWeaverOutput>> o) { this->outputs = o; }
 };
 
 class StreamWeaverAudioStreamPlayback : public godot::AudioStreamPlayback {
@@ -254,7 +298,7 @@ public:
 
 	void initialize(godot::Ref<StreamWeaverAudioStream> parent);
 	void set_parameter(godot::StringName parameter_name, float value);
-	void trigger(godot::StringName trigger_name);
+	void trigger(godot::StringName trigger);
 
 	void _start(double p_from_pos) override;
 	void _stop() override;

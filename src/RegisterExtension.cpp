@@ -33,6 +33,8 @@ namespace
         godot::ClassDB::register_class<StreamWeaverInputStream>();
         godot::ClassDB::register_class<StreamWeaverAudioStream>();
         godot::ClassDB::register_class<StreamWeaverAudioStreamPlayback>();
+        godot::ClassDB::register_class<StreamWeaverParameter>();
+        godot::ClassDB::register_class<StreamWeaverTrigger>();
 
     }
 
