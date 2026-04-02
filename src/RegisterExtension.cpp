@@ -25,16 +25,23 @@ namespace
             return;
         }
 
-        godot::ClassDB::register_abstract_class<ParameterCondition>();
-        godot::ClassDB::register_class<ParameterConditionComparison>();
-        godot::ClassDB::register_class<ParameterConditionRange>();
+        godot::ClassDB::register_abstract_class<StreamWeaverParameter>();
+        godot::ClassDB::register_class<StreamWeaverParameterInput>();
+        godot::ClassDB::register_class<StreamWeaverParameterRemap>();
+        godot::ClassDB::register_class<StreamWeaverParameterAdd>();
+        godot::ClassDB::register_class<StreamWeaverParameterMultiply>();
+        godot::ClassDB::register_class<StreamWeaverParameterFollowInput>();
+        godot::ClassDB::register_abstract_class<StreamWeaverTrigger>();
+        godot::ClassDB::register_class<StreamWeaverTriggerInput>();
+        godot::ClassDB::register_class<StreamWeaverTriggerConditionalParameter>();
+        godot::ClassDB::register_class<StreamWeaverTriggerConditionalParameterRange>();
+        godot::ClassDB::register_class<StreamWeaverTriggerDelay>();
+        godot::ClassDB::register_class<StreamWeaverTriggerMetronome>();
         godot::ClassDB::register_abstract_class<StreamWeaverOutput>();
         godot::ClassDB::register_class<StreamWeaverOutputRandomize>();
         godot::ClassDB::register_class<StreamWeaverInputStream>();
         godot::ClassDB::register_class<StreamWeaverAudioStream>();
         godot::ClassDB::register_class<StreamWeaverAudioStreamPlayback>();
-        godot::ClassDB::register_class<StreamWeaverParameter>();
-        godot::ClassDB::register_class<StreamWeaverTrigger>();
 
     }
 

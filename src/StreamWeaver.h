@@ -6,7 +6,17 @@
 #include "godot_cpp/templates/hash_map.hpp"
 #include "godot_cpp/templates/local_vector.hpp"
 
+using chrono_clock = std::chrono::steady_clock;
+using fseconds = std::chrono::duration<float>;
+
 class StreamWeaverAudioStreamPlayback;
+
+class StreamWeaverTickInterface
+{
+public:
+    virtual ~StreamWeaverTickInterface() = default;
+    virtual void tick(float delta_time) = 0;
+};
 
 class StreamWeaverInputStream : public godot::Resource {
 	GDCLASS(StreamWeaverInputStream, Resource)
@@ -29,20 +39,151 @@ public:
     void SetGraphNodePosition(godot::Vector2 graphNodePosition) { graph_node_position = graphNodePosition; }
 };
 
+class StreamWeaverParameterRuntimeInstance
+{
+protected:
+    float current_value = 0;
+public:
+    virtual ~StreamWeaverParameterRuntimeInstance() = default;
+    virtual float get_value() { return current_value; }
+
+    void set_current_value(float value) { current_value = value; }
+};
+
 class StreamWeaverParameter : public godot::Resource
 {
     GDCLASS(StreamWeaverParameter, Resource)
+    static void _bind_methods();
+    godot::Vector2 graph_node_position;
+public:
+    godot::Vector2 GetGraphNodePosition() const { return graph_node_position; }
+    void SetGraphNodePosition(godot::Vector2 graphNodePosition) { graph_node_position = graphNodePosition; }
+
+    virtual StreamWeaverParameterRuntimeInstance* create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) = 0;
+    virtual void release_runtime_instance(StreamWeaverParameterRuntimeInstance* instance) = 0;
+};
+
+class StreamWeaverParameterInput : public StreamWeaverParameter
+{
+    GDCLASS(StreamWeaverParameterInput, StreamWeaverParameter)
 
     static void _bind_methods();
 
     godot::StringName parameter_name;
-    godot::Vector2 graph_node_position;
+    float min_value = 0;
+    float max_value = 1;
+    float start_value = 0;
 public:
-    godot::StringName GetParameterName() const { return parameter_name; }
+    [[nodiscard]] godot::StringName GetParameterName() const { return parameter_name; }
     void SetParameterName(godot::StringName parameterName) { parameter_name = parameterName; }
+    [[nodiscard]] float GetMinValue() const { return min_value; }
+    void SetMinValue(float minValue) { min_value = minValue; }
+    [[nodiscard]] float GetMaxValue() const { return max_value; }
+    void SetMaxValue(float maxValue) { max_value = maxValue; }
+    [[nodiscard]] float GetStartValue() const { return start_value; }
+    void SetStartValue(float startValue) { start_value = startValue; }
 
-    godot::Vector2 GetGraphNodePosition() const { return graph_node_position; }
-    void SetGraphNodePosition(godot::Vector2 graphNodePosition) { graph_node_position = graphNodePosition; }
+    StreamWeaverParameterRuntimeInstance* create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
+    void release_runtime_instance(StreamWeaverParameterRuntimeInstance* instance) override;
+};
+
+class StreamWeaverParameterRemap : public StreamWeaverParameter
+{
+    GDCLASS(StreamWeaverParameterRemap, StreamWeaverParameter)
+    static void _bind_methods();
+
+    float input_range_start = 0;
+    float input_range_end = 1;
+    float output_range_start = 0;
+    float output_range_end = 1;
+    godot::Ref<StreamWeaverParameterInput> input_parameter;
+public:
+    [[nodiscard]] float GetInputRangeStart() const { return input_range_start; }
+    void SetInputRangeStart(float inputRangeStart) { input_range_start = inputRangeStart; }
+    [[nodiscard]] float GetInputRangeEnd() const { return input_range_end; }
+    void SetInputRangeEnd(float inputRangeEnd) { input_range_end = inputRangeEnd; }
+    [[nodiscard]] float GetOutputRangeStart() const { return output_range_start; }
+    void SetOutputRangeStart(float outputRangeStart) { output_range_start = outputRangeStart; }
+    [[nodiscard]] float GetOutputRangeEnd() const { return output_range_end; }
+    void SetOutputRangeEnd(float outputRangeEnd) { output_range_end = outputRangeEnd; }
+    [[nodiscard]] godot::Ref<StreamWeaverParameterInput> GetInputParameter() const { return input_parameter; }
+    void SetInputParameter(godot::Ref<StreamWeaverParameterInput> inparam) { input_parameter = inparam; }
+
+    StreamWeaverParameterRuntimeInstance* create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
+    void release_runtime_instance(StreamWeaverParameterRuntimeInstance* instance) override;
+};
+
+
+class StreamWeaverParameterAdd : public StreamWeaverParameter
+{
+    GDCLASS(StreamWeaverParameterAdd, StreamWeaverParameter)
+    static void _bind_methods();
+
+    godot::LocalVector<godot::Ref<StreamWeaverParameter>> input_parameters;
+public:
+    [[nodiscard]] godot::TypedArray<StreamWeaverParameter> GetInputParameters() const;
+    void SetInputParameters(godot::TypedArray<StreamWeaverParameter> inputParameters);
+
+    StreamWeaverParameterRuntimeInstance* create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
+    void release_runtime_instance(StreamWeaverParameterRuntimeInstance* instance) override;
+};
+
+class StreamWeaverParameterMultiply : public StreamWeaverParameter
+{
+    GDCLASS(StreamWeaverParameterMultiply, StreamWeaverParameter)
+    static void _bind_methods();
+
+    godot::LocalVector<godot::Ref<StreamWeaverParameter>> input_parameters;
+public:
+    [[nodiscard]] godot::TypedArray<StreamWeaverParameter> GetInputParameters() const;
+    void SetInputParameters(godot::TypedArray<StreamWeaverParameter> inputParameters);
+
+    StreamWeaverParameterRuntimeInstance* create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
+    void release_runtime_instance(StreamWeaverParameterRuntimeInstance* instance) override;
+};
+
+class StreamWeaverParameterFollowInput : public StreamWeaverParameter
+{
+    GDCLASS(StreamWeaverParameterFollowInput, StreamWeaverParameter)
+    static void _bind_methods();
+
+    float acceleration = 1.0;
+    float max_speed = 1.0;
+    godot::Ref<StreamWeaverParameter> input_parameter;
+public:
+    [[nodiscard]] float GetAcceleration() const { return acceleration; }
+    void SetAcceleration(float p_acceleration) { acceleration = p_acceleration; }
+    [[nodiscard]] float GetMaxSpeed() const { return max_speed; }
+    void SetMaxSpeed(float p_max_speed) { max_speed = p_max_speed; }
+    [[nodiscard]] godot::Ref<StreamWeaverParameter> GetInputParameter() const { return input_parameter; }
+    void SetInputParameter(godot::Ref<StreamWeaverParameter> p_input_parameter) { input_parameter = p_input_parameter; }
+
+    StreamWeaverParameterRuntimeInstance* create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
+    void release_runtime_instance(StreamWeaverParameterRuntimeInstance* instance) override;
+};
+
+
+class StreamWeaverRuntimeTriggerableInterface
+{
+public:
+    virtual ~StreamWeaverRuntimeTriggerableInterface() = default;
+    virtual void trigger() = 0;
+};
+
+class StreamWeaverTriggerRuntimeInstance
+{
+protected:
+    godot::LocalVector<StreamWeaverRuntimeTriggerableInterface*> triggerables;
+public:
+    virtual ~StreamWeaverTriggerRuntimeInstance() = default;
+
+    void add_triggerable(StreamWeaverRuntimeTriggerableInterface* triggerable) { triggerables.push_back(triggerable); }
+    void trigger_all_triggerables()
+    {
+        for (auto& triggerable : triggerables) {
+            triggerable->trigger();
+        }
+    }
 };
 
 class StreamWeaverTrigger : public godot::Resource
@@ -50,28 +191,32 @@ class StreamWeaverTrigger : public godot::Resource
     GDCLASS(StreamWeaverTrigger, Resource)
 
     static void _bind_methods();
+    godot::Vector2 graph_node_position;
+public:
+    godot::Vector2 GetGraphNodePosition() const { return graph_node_position; }
+    void SetGraphNodePosition(godot::Vector2 graphNodePosition) { graph_node_position = graphNodePosition; }
+
+    virtual StreamWeaverTriggerRuntimeInstance* create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) = 0;
+    virtual void release_runtime_instance(StreamWeaverTriggerRuntimeInstance* instance) = 0;
+};
+
+class StreamWeaverTriggerInput : public StreamWeaverTrigger
+{
+    GDCLASS(StreamWeaverTriggerInput, StreamWeaverTrigger)
+
+    static void _bind_methods();
 
     godot::StringName trigger_name;
-    godot::Vector2 graph_node_position;
 public:
     godot::StringName GetTriggerName() const { return trigger_name; }
     void SetTriggerName(godot::StringName triggerName) { trigger_name = triggerName; }
-    godot::Vector2 GetGraphNodePosition() const { return graph_node_position; }
-    void SetGraphNodePosition(godot::Vector2 graphNodePosition) { graph_node_position = graphNodePosition; }
+
+    StreamWeaverTriggerRuntimeInstance* create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
+    void release_runtime_instance(StreamWeaverTriggerRuntimeInstance* instance) override;
 };
 
-class ParameterCondition : public godot::Resource {
-	GDCLASS(ParameterCondition, Resource)
-
-protected:
-	static void _bind_methods();
-
-public:
-	virtual bool check(godot::StringName parameterName, float parameterValue) = 0;
-};
-
-class ParameterConditionComparison : public ParameterCondition {
-	GDCLASS(ParameterConditionComparison, ParameterCondition)
+class StreamWeaverTriggerConditionalParameter : public StreamWeaverTrigger {
+	GDCLASS(StreamWeaverTriggerConditionalParameter, StreamWeaverTrigger)
 
 	static void _bind_methods();
 public:
@@ -79,7 +224,8 @@ public:
 		EQ, LT, GT, LTE, GTE, NEQ
 	};
 private:
-	godot::Ref<StreamWeaverParameter> parameter;
+    godot::Ref<StreamWeaverTrigger> input_trigger;
+	godot::Ref<StreamWeaverParameterInput> parameter;
 	Comparison comparison_type = EQ;
 	float value = 0;
 
@@ -95,60 +241,95 @@ private:
 			value));
 	}
 public:
-	godot::Ref<StreamWeaverParameter> GetParameter() const { return parameter; }
-	void SetParameter(godot::Ref<StreamWeaverParameter> p) { parameter = p; update_name(); }
-	int GetComparisonType() const { return comparison_type; }
+	[[nodiscard]] godot::Ref<StreamWeaverParameterInput> GetParameter() const { return parameter; }
+	void SetParameter(godot::Ref<StreamWeaverParameterInput> p) { parameter = p; update_name(); }
+    [[nodiscard]] godot::Ref<StreamWeaverTrigger> GetInputTrigger() const { return input_trigger; }
+    void SetInputTrigger(godot::Ref<StreamWeaverTrigger> inputTrigger) { input_trigger = inputTrigger; }
+	[[nodiscard]] int GetComparisonType() const { return comparison_type; }
 	void SetComparisonType(int comparisonType) { comparison_type = static_cast<Comparison>(comparisonType); update_name(); }
-	float GetValue() const { return value; }
+	[[nodiscard]] float GetValue() const { return value; }
 	void SetValue(float v) { this->value = v; update_name(); }
-	bool check(godot::StringName parameterName, float parameterValue) override {
-		if (parameter.is_valid() && parameterName == parameter->GetParameterName()) {
-			switch (comparison_type) {
-				case EQ: return godot::Math::is_equal_approx(parameterValue, value);
-				case NEQ: return !godot::Math::is_equal_approx(parameterValue, value);
-				case LT: return parameterValue < value;
-				case GT: return parameterValue > value;
-				case LTE: return parameterValue <= value;
-				case GTE: return parameterValue >= value;
-			}
-		}
-		return true;
-	}
+
+    StreamWeaverTriggerRuntimeInstance* create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
+    void release_runtime_instance(StreamWeaverTriggerRuntimeInstance* instance) override;
 };
-VARIANT_ENUM_CAST(ParameterConditionComparison::Comparison);
+VARIANT_ENUM_CAST(StreamWeaverTriggerConditionalParameter::Comparison);
 
 
-class ParameterConditionRange : public ParameterCondition {
-	GDCLASS(ParameterConditionRange, ParameterCondition)
+class StreamWeaverTriggerConditionalParameterRange : public StreamWeaverTrigger {
+	GDCLASS(StreamWeaverTriggerConditionalParameterRange, StreamWeaverTrigger)
 
 	static void _bind_methods();
 
-	godot::Ref<StreamWeaverParameter> parameter;
+	godot::Ref<StreamWeaverParameterInput> parameter;
+    godot::Ref<StreamWeaverTrigger> input_trigger;
 	float min_value = 0;
 	float max_value = 1;
 	void update_name() {
 		set_name(godot::vformat("%f <= %s >= %f", min_value, parameter.is_valid() ? parameter->GetParameterName() : godot::StringName("<null>"), max_value));
 	}
 public:
-	godot::Ref<StreamWeaverParameter> GetParameter() const { return parameter; }
-	void SetParameter(godot::Ref<StreamWeaverParameter> p) { parameter = p; update_name(); }
-	float GetMinValue() const { return min_value; }
+	[[nodiscard]] godot::Ref<StreamWeaverParameterInput> GetParameter() const { return parameter; }
+	void SetParameter(godot::Ref<StreamWeaverParameterInput> p) { parameter = p; update_name(); }
+    [[nodiscard]] godot::Ref<StreamWeaverTrigger> GetInputTrigger() const { return input_trigger; }
+    void SetInputTrigger(godot::Ref<StreamWeaverTrigger> inputTrigger) { input_trigger = inputTrigger; }
+	[[nodiscard]] float GetMinValue() const { return min_value; }
 	void SetMinValue(float minValue) { min_value = minValue; update_name(); }
-	float GetMaxValue() const { return max_value; }
+	[[nodiscard]] float GetMaxValue() const { return max_value; }
 	void SetMaxValue(float maxValue) { max_value = maxValue; update_name(); }
-	bool check(godot::StringName parameterName, float parameterValue) override {
-		if (parameter.is_valid() && parameterName == parameter->GetParameterName()) {
-			return parameterValue >= min_value && parameterValue <= max_value;
-		}
-		return true;
-	}
+
+    StreamWeaverTriggerRuntimeInstance* create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
+    void release_runtime_instance(StreamWeaverTriggerRuntimeInstance* instance) override;
 };
 
-class StreamWeaverOutputRuntimeInstanceBase {
+class StreamWeaverTriggerDelay : public StreamWeaverTrigger {
+    GDCLASS(StreamWeaverTriggerDelay, StreamWeaverTrigger)
+    static void _bind_methods();
+
+    godot::Ref<StreamWeaverTrigger> input_trigger;
+    float delay_time = 0;
+    godot::Ref<StreamWeaverParameter> multiplier_parameter;
 public:
-	virtual ~StreamWeaverOutputRuntimeInstanceBase() = default;
-	virtual void triggered() = 0;
+    [[nodiscard]] godot::Ref<StreamWeaverTrigger> GetInputTrigger() const { return input_trigger; }
+    void SetInputTrigger(godot::Ref<StreamWeaverTrigger> inputTrigger) { input_trigger = inputTrigger; }
+    [[nodiscard]] float GetDelayTime() const { return delay_time; }
+    void SetDelayTime(float delayTime) { delay_time = delayTime; }
+    [[nodiscard]] godot::Ref<StreamWeaverParameter> GetMultiplierParameter() const { return multiplier_parameter; }
+    void SetMultiplierParameter(godot::Ref<StreamWeaverParameter> multiplierParameter) { multiplier_parameter = multiplierParameter; }
+
+    StreamWeaverTriggerRuntimeInstance* create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
+    void release_runtime_instance(StreamWeaverTriggerRuntimeInstance* instance) override;
+};
+
+class StreamWeaverTriggerMetronome : public StreamWeaverTrigger {
+    GDCLASS(StreamWeaverTriggerMetronome, StreamWeaverTrigger)
+    static void _bind_methods();
+
+    float base_trigger_rate = 1;
+    godot::Ref<StreamWeaverParameter> multiplier_parameter;
+public:
+    [[nodiscard]] float GetBaseTriggerRate() const { return base_trigger_rate; }
+    void SetBaseTriggerRate(float baseTriggerRate) { base_trigger_rate = baseTriggerRate; }
+    [[nodiscard]] godot::Ref<StreamWeaverParameter> GetMultiplierParameter() const { return multiplier_parameter; }
+    void SetMultiplierParameter(godot::Ref<StreamWeaverParameter> multiplierParameter) { multiplier_parameter = multiplierParameter; }
+
+    StreamWeaverTriggerRuntimeInstance* create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
+    void release_runtime_instance(StreamWeaverTriggerRuntimeInstance* instance) override;
+};
+
+
+class StreamWeaverOutputRuntimeInstanceBase : public StreamWeaverRuntimeTriggerableInterface {
+public:
+	~StreamWeaverOutputRuntimeInstanceBase() override = default;
 	virtual bool mix_output_into_buffer(godot::AudioFrame *p_buffer, int32_t p_frames) =0;
+
+    float base_volume_db = 0;
+    float base_pitch = 1;
+    StreamWeaverParameterRuntimeInstance* volume_multiplier = nullptr;
+    StreamWeaverParameterRuntimeInstance* pitch_multiplier = nullptr;
+
+    [[nodiscard]] float get_volume() const { return godot::UtilityFunctions::db_to_linear(base_volume_db) * (volume_multiplier ? volume_multiplier->get_value() : 1); }
+    [[nodiscard]] float get_pitch() const { return base_pitch * (pitch_multiplier ? pitch_multiplier->get_value() : 1); }
 };
 
 class StreamWeaverOutput : public godot::Resource {
@@ -156,29 +337,36 @@ class StreamWeaverOutput : public godot::Resource {
 protected:
 	static void _bind_methods();
 	godot::StringName output_name;
-	godot::TypedArray<ParameterCondition> conditions;
-	godot::Ref<StreamWeaverTrigger> triggered_by;
+	godot::TypedArray<godot::Ref<StreamWeaverTrigger>> triggers;
 
     godot::Vector2 graph_node_position;
 
 	void update_name() {
-		godot::StringName trigger_name = "None";
-		if (triggered_by.is_valid()) {
-			trigger_name = triggered_by->GetTriggerName();
-		}
-		set_name(godot::vformat("%s (%s)", output_name, trigger_name));
+		set_name(output_name);
 	}
+    float base_volume_db = 0;
+    float base_pitch = 1;
+    godot::Ref<StreamWeaverParameter> volume_multiplier;
+    godot::Ref<StreamWeaverParameter> pitch_multiplier;
+
+    void initialize_runtime_instance_base(StreamWeaverOutputRuntimeInstanceBase* runtime_instance, StreamWeaverAudioStreamPlayback* playback);
 public:
-	godot::StringName GetOutputName() const { return output_name; }
+	[[nodiscard]] godot::StringName GetOutputName() const { return output_name; }
 	void SetOutputName(godot::StringName outputName) { output_name = outputName; update_name(); }
-	godot::TypedArray<ParameterCondition> GetConditions() const { return conditions; }
-	void SetConditions(godot::TypedArray<ParameterCondition> c) { this->conditions = c; }
-	godot::Ref<StreamWeaverTrigger> GetTriggeredBy() const { return triggered_by; }
-	void SetTriggeredBy(godot::Ref<StreamWeaverTrigger> triggeredBy) { triggered_by = triggeredBy; update_name(); }
+	[[nodiscard]] godot::TypedArray<godot::Ref<StreamWeaverTrigger>> GetTriggers() const { return triggers; }
+	void SetTriggers(godot::TypedArray<godot::Ref<StreamWeaverTrigger>> p_triggers) { triggers = p_triggers; update_name(); }
 
-	bool should_trigger(godot::StringName trigger, const godot::HashMap<godot::StringName, float>& parameters);
+    [[nodiscard]] float GetBaseVolumeDb() const { return base_volume_db; }
+    void SetBaseVolumeDb(float baseVolumeDb) { base_volume_db = baseVolumeDb; }
+    [[nodiscard]] float GetBasePitch() const { return base_pitch; }
+    void SetBasePitch(float basePitch) { base_pitch = basePitch; }
 
-	virtual StreamWeaverOutputRuntimeInstanceBase* create_runtime_instance(const StreamWeaverAudioStreamPlayback& from_playback) =0;
+    [[nodiscard]] godot::Ref<StreamWeaverParameter> GetVolumeMultiplier() const { return volume_multiplier; }
+    void SetVolumeMultiplier(godot::Ref<StreamWeaverParameter> volumeMultiplier) { volume_multiplier = volumeMultiplier; }
+    [[nodiscard]] godot::Ref<StreamWeaverParameter> GetPitchMultiplier() const { return pitch_multiplier; }
+    void SetPitchMultiplier(godot::Ref<StreamWeaverParameter> pitchMultiplier) { pitch_multiplier = pitchMultiplier; }
+
+	virtual StreamWeaverOutputRuntimeInstanceBase* create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) =0;
 	virtual void release_runtime_instance(StreamWeaverOutputRuntimeInstanceBase* instance) = 0;
 
     godot::Vector2 GetGraphNodePosition() const { return graph_node_position; }
@@ -190,18 +378,19 @@ class StreamWeaverOutputRandomize : public StreamWeaverOutput {
 
 	static void _bind_methods();
 
-	float randomize_pitch = 1;
-	float randomize_volume = 1;
+	float randomize_pitch_offset = 0;
+	float randomize_volume_offset = 0;
 	godot::TypedArray<godot::Ref<StreamWeaverInputStream>> input_streams;
+
 public:
-	float GetRandomizePitch() const { return randomize_pitch; }
-	void SetRandomizePitch(float randomizePitch) { randomize_pitch = randomizePitch; }
-	float GetRandomizeVolume() const { return randomize_volume; }
-	void SetRandomizeVolume(float randomizeVolume) { randomize_volume = randomizeVolume; }
-	godot::TypedArray<godot::Ref<StreamWeaverInputStream>> GetInputStreams() const { return input_streams; }
+	[[nodiscard]] float GetRandomizePitchOffset() const { return randomize_pitch_offset; }
+	void SetRandomizePitchOffset(float randomizePitch) { randomize_pitch_offset = randomizePitch; }
+	[[nodiscard]] float GetRandomizeVolumeOffset() const { return randomize_volume_offset; }
+	void SetRandomizeVolumeOffset(float randomizeVolume) { randomize_volume_offset = randomizeVolume; }
+	[[nodiscard]] godot::TypedArray<godot::Ref<StreamWeaverInputStream>> GetInputStreams() const { return input_streams; }
 	void SetInputStreams(godot::TypedArray<godot::Ref<StreamWeaverInputStream>> inputStreams) { input_streams = inputStreams; }
 
-	StreamWeaverOutputRuntimeInstanceBase *create_runtime_instance(const StreamWeaverAudioStreamPlayback &from_playback) override;
+	StreamWeaverOutputRuntimeInstanceBase *create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
 	void release_runtime_instance(StreamWeaverOutputRuntimeInstanceBase *instance) override;
 };
 
@@ -212,7 +401,7 @@ class StreamWeaverOutputLooping : public StreamWeaverOutput {
 
 
 	godot::StringName input_stream;
-	godot::Ref<StreamWeaverParameter> modifying_parameter;
+	godot::Ref<StreamWeaverParameterInput> modifying_parameter;
 	float min_volume = 0;
 	float max_volume = 0;
 	float parameter_value_min_volume;
@@ -222,28 +411,28 @@ class StreamWeaverOutputLooping : public StreamWeaverOutput {
 	float parameter_value_min_pitch;
 	float parameter_value_max_pitch;
 public:
-	godot::StringName GetInputStream() const { return input_stream; }
+	[[nodiscard]] godot::StringName GetInputStream() const { return input_stream; }
 	void SetInputStream(godot::StringName inputStream) { input_stream = inputStream; }
-	godot::Ref<StreamWeaverParameter> GetModifyingParameter() const { return modifying_parameter; }
-	void SetModifyingParameter(godot::Ref<StreamWeaverParameter> modifyingParameter) { modifying_parameter = modifyingParameter; }
-	float GetMinVolume() const { return min_volume; }
+	[[nodiscard]] godot::Ref<StreamWeaverParameterInput> GetModifyingParameter() const { return modifying_parameter; }
+	void SetModifyingParameter(godot::Ref<StreamWeaverParameterInput> modifyingParameter) { modifying_parameter = modifyingParameter; }
+	[[nodiscard]] float GetMinVolume() const { return min_volume; }
 	void SetMinVolume(float minVolume) { min_volume = minVolume; }
-	float GetMaxVolume() const { return max_volume; }
+	[[nodiscard]] float GetMaxVolume() const { return max_volume; }
 	void SetMaxVolume(float maxVolume) { max_volume = maxVolume; }
-	float GetParameterValueMinVolume() const { return parameter_value_min_volume; }
+	[[nodiscard]] float GetParameterValueMinVolume() const { return parameter_value_min_volume; }
 	void SetParameterValueMinVolume(float parameterValueMinVolume) { parameter_value_min_volume = parameterValueMinVolume; }
-	float GetParameterValueMaxVolume() const { return parameter_value_max_volume; }
+	[[nodiscard]] float GetParameterValueMaxVolume() const { return parameter_value_max_volume; }
 	void SetParameterValueMaxVolume(float parameterValueMaxVolume) { parameter_value_max_volume = parameterValueMaxVolume; }
-	float GetMinPitch() const { return min_pitch; }
+	[[nodiscard]] float GetMinPitch() const { return min_pitch; }
 	void SetMinPitch(float minPitch) { min_pitch = minPitch; }
-	float GetMaxPitch() const { return max_pitch; }
+	[[nodiscard]] float GetMaxPitch() const { return max_pitch; }
 	void SetMaxPitch(float maxPitch) { max_pitch = maxPitch; }
-	float GetParameterValueMinPitch() const { return parameter_value_min_pitch; }
+	[[nodiscard]] float GetParameterValueMinPitch() const { return parameter_value_min_pitch; }
 	void SetParameterValueMinPitch(float parameterValueMinPitch) { parameter_value_min_pitch = parameterValueMinPitch; }
-	float GetParameterValueMaxPitch() const { return parameter_value_max_pitch; }
+	[[nodiscard]] float GetParameterValueMaxPitch() const { return parameter_value_max_pitch; }
 	void SetParameterValueMaxPitch(float parameterValueMaxPitch) { parameter_value_max_pitch = parameterValueMaxPitch; }
 
-	StreamWeaverOutputRuntimeInstanceBase *create_runtime_instance(const StreamWeaverAudioStreamPlayback &from_playback) override;
+	StreamWeaverOutputRuntimeInstanceBase *create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
 	void release_runtime_instance(StreamWeaverOutputRuntimeInstanceBase *instance) override;
 };
 
@@ -263,16 +452,16 @@ class StreamWeaverAudioStream : public godot::AudioStream {
 	int num_playbacks;
 
 public:
-	godot::Ref<godot::AudioStreamPlayback> _instantiate_playback() const override;
-	godot::String _get_stream_name() const override;
+	[[nodiscard]] godot::Ref<godot::AudioStreamPlayback> _instantiate_playback() const override;
+	[[nodiscard]] godot::String _get_stream_name() const override;
 
-	godot::TypedArray<godot::Ref<StreamWeaverParameter>> GetParameters() const { return parameters; }
+	[[nodiscard]] godot::TypedArray<godot::Ref<StreamWeaverParameter>> GetParameters() const { return parameters; }
 	void SetParameters(godot::TypedArray<godot::Ref<StreamWeaverParameter>> p) { this->parameters = p; }
-	godot::TypedArray<godot::Ref<StreamWeaverTrigger>> GetTriggers() const { return triggers; }
+	[[nodiscard]] godot::TypedArray<godot::Ref<StreamWeaverTrigger>> GetTriggers() const { return triggers; }
 	void SetTriggers(godot::TypedArray<godot::Ref<StreamWeaverTrigger>> t) { this->triggers = t; }
-	godot::TypedArray<godot::Ref<StreamWeaverInputStream>> GetInputs() const { return inputs; }
+	[[nodiscard]] godot::TypedArray<godot::Ref<StreamWeaverInputStream>> GetInputs() const { return inputs; }
 	void SetInputs(godot::TypedArray<godot::Ref<StreamWeaverInputStream>> inpt) { this->inputs = inpt; }
-	godot::TypedArray<godot::Ref<StreamWeaverOutput>> GetOutputs() const { return outputs; }
+	[[nodiscard]] godot::TypedArray<godot::Ref<StreamWeaverOutput>> GetOutputs() const { return outputs; }
 	void SetOutputs(godot::TypedArray<godot::Ref<StreamWeaverOutput>> o) { this->outputs = o; }
 };
 
@@ -282,19 +471,23 @@ class StreamWeaverAudioStreamPlayback : public godot::AudioStreamPlayback {
 	static void _bind_methods();
 
 	godot::Ref<StreamWeaverAudioStream> parent_stream;
-	godot::HashMap<godot::StringName, float> parameters;
+
+	godot::HashMap<godot::StringName, StreamWeaverParameterRuntimeInstance*> input_parameters;
+    godot::HashMap<godot::StringName, StreamWeaverTriggerRuntimeInstance*> input_triggers;
 	godot::LocalVector<StreamWeaverOutputRuntimeInstanceBase*> runtime_outputs;
+    godot::LocalVector<StreamWeaverTickInterface*> ticking_objects;
+    chrono_clock::time_point last_tick_time;
+
+    godot::HashMap<godot::Ref<StreamWeaverParameter>, StreamWeaverParameterRuntimeInstance*> all_parameters;
+    godot::HashMap<godot::Ref<StreamWeaverTrigger>, StreamWeaverTriggerRuntimeInstance*> all_triggers;
 	bool active = false;
 public:
 	~StreamWeaverAudioStreamPlayback() override;
-	const StreamWeaverAudioStream& GetParent() const { return *parent_stream.ptr(); }
-	const godot::HashMap<godot::StringName, float>& GetCurrentParameterValues() const { return parameters; }
-	float GetCurrentParameterValue(godot::StringName name) const {
-		const float* value_if_there = parameters.getptr(name);
-		if (value_if_there == nullptr)
-			return 0;
-		return *value_if_there;
-	}
+	[[nodiscard]] const StreamWeaverAudioStream& GetParent() const { return *parent_stream.ptr(); }
+
+    StreamWeaverParameterRuntimeInstance* get_parameter_runtime_instance(godot::Ref<StreamWeaverParameter> parameter);
+    StreamWeaverTriggerRuntimeInstance* get_trigger_runtime_instance(godot::Ref<StreamWeaverTrigger> trigger);
+    void add_ticking(StreamWeaverTickInterface* ticking) { ticking_objects.push_back(ticking); }
 
 	void initialize(godot::Ref<StreamWeaverAudioStream> parent);
 	void set_parameter(godot::StringName parameter_name, float value);
