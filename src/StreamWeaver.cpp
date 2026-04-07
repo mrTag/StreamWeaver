@@ -106,7 +106,7 @@ public:
         }
         float output_range_length = output_range_end - output_range_start;
         float output_value = (input_value - input_range_start) / input_range_length * output_range_length + output_range_start;
-        return output_value;
+        return Math::clamp(output_value, output_range_start, output_range_end);
     }
 };
 
@@ -341,6 +341,104 @@ StreamWeaverParameterRuntimeInstance* StreamWeaverParameterFollowInput::create_r
 void StreamWeaverParameterFollowInput::release_runtime_instance(StreamWeaverParameterRuntimeInstance* instance)
 {
     memdelete(dynamic_cast<StreamWeaverParameterFollowInputRuntimeInstance*>(instance));
+}
+
+// -------------------- StreamWeaverParameterWindow ------------------------
+
+void StreamWeaverParameterWindow::_bind_methods()
+{
+    ClassDB::bind_method(D_METHOD("get_input_parameter"), &StreamWeaverParameterWindow::GetInputParameter);
+    ClassDB::bind_method(D_METHOD("set_input_parameter", "input_parameter"), &StreamWeaverParameterWindow::SetInputParameter);
+    ClassDB::bind_method(D_METHOD("get_min_value"), &StreamWeaverParameterWindow::GetMinValue);
+    ClassDB::bind_method(D_METHOD("set_min_value", "min_value"), &StreamWeaverParameterWindow::SetMinValue);
+    ClassDB::bind_method(D_METHOD("get_max_value"), &StreamWeaverParameterWindow::GetMaxValue);
+    ClassDB::bind_method(D_METHOD("set_max_value", "max_value"), &StreamWeaverParameterWindow::SetMaxValue);
+    ClassDB::bind_method(D_METHOD("get_value_interpolation_window"), &StreamWeaverParameterWindow::GetValueInterpolationWindow);
+    ClassDB::bind_method(D_METHOD("set_value_interpolation_window", "value_interpolation_window"), &StreamWeaverParameterWindow::SetValueInterpolationWindow);
+    ClassDB::bind_method(D_METHOD("get_interpolation_type"), &StreamWeaverParameterWindow::GetInterpolationType);
+    ClassDB::bind_method(D_METHOD("set_interpolation_type", "interpolation_type"), &StreamWeaverParameterWindow::SetInterpolationType);
+
+    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "input_parameter", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverParameter"), "set_input_parameter", "get_input_parameter");
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "min_value"), "set_min_value", "get_min_value");
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "max_value"), "set_max_value", "get_max_value");
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "value_interpolation_window"), "set_value_interpolation_window", "get_value_interpolation_window");
+    ADD_PROPERTY(PropertyInfo(Variant::INT, "interpolation_type", PROPERTY_HINT_ENUM, "Linear,Quadratic,SmoothStep,Cubic"), "set_interpolation_type", "get_interpolation_type");
+
+    BIND_ENUM_CONSTANT(LINEAR);
+    BIND_ENUM_CONSTANT(QUADRATIC);
+    BIND_ENUM_CONSTANT(SMOOTHSTEP);
+    BIND_ENUM_CONSTANT(CUBIC);
+}
+
+class StreamWeaverParameterWindowRuntimeInstance : public StreamWeaverParameterRuntimeInstance
+{
+public:
+    StreamWeaverParameterRuntimeInstance* input_parameter_runtime_instance = nullptr;
+    float min_value = 0.0;
+    float max_value = 1.0;
+    float value_interpolation_window = 0.1;
+    StreamWeaverParameterWindow::InterpolationType interpolation_type = StreamWeaverParameterWindow::LINEAR;
+
+    float interpolate(float t) const {
+        if (t <= 0.0f) return 0.0f;
+        if (t >= 1.0f) return 1.0f;
+
+        switch (interpolation_type) {
+            case StreamWeaverParameterWindow::LINEAR:
+                return t;
+            case StreamWeaverParameterWindow::QUADRATIC:
+                return t * t;
+            case StreamWeaverParameterWindow::SMOOTHSTEP:
+                return t * t * (3.0f - 2.0f * t);
+            case StreamWeaverParameterWindow::CUBIC:
+                return t * t * t;
+            default:
+                return t;
+        }
+    }
+
+    float get_value() override
+    {
+        if (!input_parameter_runtime_instance) return 0.0f;
+
+        float input_val = input_parameter_runtime_instance->get_value();
+
+        if (input_val < min_value || input_val > max_value) {
+            return 0.0f;
+        }
+
+        float window = godot::Math::max(0.00001f, value_interpolation_window);
+
+        if (input_val < min_value + window) {
+            float t = (input_val - min_value) / window;
+            return interpolate(t);
+        }
+
+        if (input_val > max_value - window) {
+            float t = (max_value - input_val) / window;
+            return interpolate(t);
+        }
+
+        return 1.0f;
+    }
+};
+
+StreamWeaverParameterRuntimeInstance* StreamWeaverParameterWindow::create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback)
+{
+    auto runtime_instance = memnew(StreamWeaverParameterWindowRuntimeInstance);
+    if (input_parameter.is_valid()) {
+        runtime_instance->input_parameter_runtime_instance = from_playback->get_parameter_runtime_instance(input_parameter);
+    }
+    runtime_instance->min_value = min_value;
+    runtime_instance->max_value = max_value;
+    runtime_instance->value_interpolation_window = value_interpolation_window;
+    runtime_instance->interpolation_type = interpolation_type;
+    return runtime_instance;
+}
+
+void StreamWeaverParameterWindow::release_runtime_instance(StreamWeaverParameterRuntimeInstance* instance)
+{
+    memdelete(dynamic_cast<StreamWeaverParameterWindowRuntimeInstance*>(instance));
 }
 
 // -------------------- StreamWeaverTrigger -------------------------
@@ -723,8 +821,8 @@ public:
 			auto mixed_input = cpi.playback->mix_audio(pitch + cpi.pitch_offset, p_frames);
 		    int num_frames_mixed = Math::min( p_frames, static_cast<int32_t>( mixed_input.size() ) );
 			for (int i = 0; i < num_frames_mixed; i++) {
-				p_buffer[i].left += mixed_input[i].x * volume;
-				p_buffer[i].right += mixed_input[i].y * volume;
+				p_buffer[i].left += mixed_input[i].x * (volume + cpi.volume_offset);
+				p_buffer[i].right += mixed_input[i].y * (volume + cpi.volume_offset);
 			}
 
 			if (num_frames_mixed < p_frames) {
@@ -764,70 +862,250 @@ void StreamWeaverOutputLooping::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_input_stream"), &StreamWeaverOutputLooping::GetInputStream);
 	ClassDB::bind_method(D_METHOD("set_input_stream", "input_stream"), &StreamWeaverOutputLooping::SetInputStream);
 
-	ClassDB::bind_method(D_METHOD("get_modifying_parameter"), &StreamWeaverOutputLooping::GetModifyingParameter);
-	ClassDB::bind_method(D_METHOD("set_modifying_parameter", "modifying_parameter"), &StreamWeaverOutputLooping::SetModifyingParameter);
-
-	ClassDB::bind_method(D_METHOD("get_min_volume"), &StreamWeaverOutputLooping::GetMinVolume);
-	ClassDB::bind_method(D_METHOD("set_min_volume", "min_volume"), &StreamWeaverOutputLooping::SetMinVolume);
-
-	ClassDB::bind_method(D_METHOD("get_max_volume"), &StreamWeaverOutputLooping::GetMaxVolume);
-	ClassDB::bind_method(D_METHOD("set_max_volume", "max_volume"), &StreamWeaverOutputLooping::SetMaxVolume);
-
-	ClassDB::bind_method(D_METHOD("get_parameter_value_min_volume"), &StreamWeaverOutputLooping::GetParameterValueMinVolume);
-	ClassDB::bind_method(D_METHOD("set_parameter_value_min_volume", "parameter_value_min_volume"), &StreamWeaverOutputLooping::SetParameterValueMinVolume);
-
-	ClassDB::bind_method(D_METHOD("get_parameter_value_max_volume"), &StreamWeaverOutputLooping::GetParameterValueMaxVolume);
-	ClassDB::bind_method(D_METHOD("set_parameter_value_max_volume", "parameter_value_max_volume"), &StreamWeaverOutputLooping::SetParameterValueMaxVolume);
-
-	ClassDB::bind_method(D_METHOD("get_min_pitch"), &StreamWeaverOutputLooping::GetMinPitch);
-	ClassDB::bind_method(D_METHOD("set_min_pitch", "min_pitch"), &StreamWeaverOutputLooping::SetMinPitch);
-
-	ClassDB::bind_method(D_METHOD("get_max_pitch"), &StreamWeaverOutputLooping::GetMaxPitch);
-	ClassDB::bind_method(D_METHOD("set_max_pitch", "max_pitch"), &StreamWeaverOutputLooping::SetMaxPitch);
-
-	ClassDB::bind_method(D_METHOD("get_parameter_value_min_pitch"), &StreamWeaverOutputLooping::GetParameterValueMinPitch);
-	ClassDB::bind_method(D_METHOD("set_parameter_value_min_pitch", "parameter_value_min_pitch"), &StreamWeaverOutputLooping::SetParameterValueMinPitch);
-
-	ClassDB::bind_method(D_METHOD("get_parameter_value_max_pitch"), &StreamWeaverOutputLooping::GetParameterValueMaxPitch);
-	ClassDB::bind_method(D_METHOD("set_parameter_value_max_pitch", "parameter_value_max_pitch"), &StreamWeaverOutputLooping::SetParameterValueMaxPitch);
-
 	ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "input_stream"), "set_input_stream", "get_input_stream");
-	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "modifying_parameter", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverParameterInput"), "set_modifying_parameter", "get_modifying_parameter");
-
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "min_volume"), "set_min_volume", "get_min_volume");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "max_volume"), "set_max_volume", "get_max_volume");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "parameter_value_min_volume"), "set_parameter_value_min_volume", "get_parameter_value_min_volume");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "parameter_value_max_volume"), "set_parameter_value_max_volume", "get_parameter_value_max_volume");
-
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "min_pitch"), "set_min_pitch", "get_min_pitch");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "max_pitch"), "set_max_pitch", "get_max_pitch");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "parameter_value_min_pitch"), "set_parameter_value_min_pitch", "get_parameter_value_min_pitch");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "parameter_value_max_pitch"), "set_parameter_value_max_pitch", "get_parameter_value_max_pitch");
 }
 
 class ParameterizedOutputLoopingRuntimeInstance : public StreamWeaverOutputRuntimeInstanceBase {
 public:
-	StreamWeaverInputStream* input;
-	int last_played_index = 0;
+    Ref<AudioStreamPlayback> playback;
 
 	void trigger() override {
-
+        // this one will keep playing the looping audio in the background, no triggering.
 	}
 
 	bool mix_output_into_buffer(AudioFrame *p_buffer, int32_t p_frames) override {
+	    if (playback == nullptr)
+	    {
+	        return false;
+	    }
+	    PROFILE_FUNCTION();
 
-		return true;
+	    float volume = get_volume();
+	    if (volume <= 0.0001f)
+	    {
+	        return false;
+	    }
+	    float pitch = get_pitch();
+	    auto mixed_input = playback->mix_audio(pitch, p_frames);
+	    int num_frames_mixed = Math::min( p_frames, static_cast<int32_t>( mixed_input.size() ) );
+	    for (int i = 0; i < num_frames_mixed; i++) {
+	        p_buffer[i].left += mixed_input[i].x * volume;
+	        p_buffer[i].right += mixed_input[i].y * volume;
+	    }
+        return num_frames_mixed == p_frames;
 	}
 };
 
 StreamWeaverOutputRuntimeInstanceBase *StreamWeaverOutputLooping::create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) {
-	auto* instance = new ParameterizedOutputLoopingRuntimeInstance();
-
+	auto* instance = memnew(ParameterizedOutputLoopingRuntimeInstance);
+    initialize_runtime_instance_base( instance, from_playback );
+    instance->playback = input_stream->GetAudioStream()->instantiate_playback();
+    if (instance->playback != nullptr)
+    {
+        instance->playback->start();
+    }
 	return instance;
 }
 
 void StreamWeaverOutputLooping::release_runtime_instance(StreamWeaverOutputRuntimeInstanceBase *instance) {
-	delete dynamic_cast<ParameterizedOutputLoopingRuntimeInstance *>(instance);
+	memdelete(dynamic_cast<ParameterizedOutputLoopingRuntimeInstance *>(instance));
+}
+
+
+// -------------------- StreamWeaverOutputGranularLinearSweep ------
+void StreamWeaverOutputGranularLinearSweep::_bind_methods()
+{
+    ClassDB::bind_method(D_METHOD("get_input_stream"), &StreamWeaverOutputGranularLinearSweep::GetInputStream);
+    ClassDB::bind_method(D_METHOD("set_input_stream", "inputStream"), &StreamWeaverOutputGranularLinearSweep::SetInputStream);
+    ClassDB::bind_method(D_METHOD("get_sweeping_parameter"), &StreamWeaverOutputGranularLinearSweep::GetSweepingParameter);
+    ClassDB::bind_method(D_METHOD("set_sweeping_parameter", "sweepingParameter"), &StreamWeaverOutputGranularLinearSweep::SetSweepingParameter);
+    ClassDB::bind_method(D_METHOD("get_min_parameter_value"), &StreamWeaverOutputGranularLinearSweep::GetMinParameterValue);
+    ClassDB::bind_method(D_METHOD("set_min_parameter_value", "minParameterValue"), &StreamWeaverOutputGranularLinearSweep::SetMinParameterValue);
+    ClassDB::bind_method(D_METHOD("get_max_parameter_value"), &StreamWeaverOutputGranularLinearSweep::GetMaxParameterValue);
+    ClassDB::bind_method(D_METHOD("set_max_parameter_value", "maxParameterValue"), &StreamWeaverOutputGranularLinearSweep::SetMaxParameterValue);
+    ClassDB::bind_method(D_METHOD("get_min_grain_size_milliseconds"), &StreamWeaverOutputGranularLinearSweep::GetMinGrainSizeMilliseconds);
+    ClassDB::bind_method(D_METHOD("set_min_grain_size_milliseconds", "grainSizeMs"), &StreamWeaverOutputGranularLinearSweep::SetMinGrainSizeMilliseconds);
+    ClassDB::bind_method(D_METHOD("get_max_grain_size_milliseconds"), &StreamWeaverOutputGranularLinearSweep::GetMaxGrainSizeMilliseconds);
+    ClassDB::bind_method(D_METHOD("set_max_grain_size_milliseconds", "maxGrainSizeMs"), &StreamWeaverOutputGranularLinearSweep::SetMaxGrainSizeMilliseconds);
+    ClassDB::bind_method(D_METHOD("get_grain_jitter_percentage"), &StreamWeaverOutputGranularLinearSweep::GetGrainJitterPercentage);
+    ClassDB::bind_method(D_METHOD("set_grain_jitter_percentage", "grainJitterPercentage"), &StreamWeaverOutputGranularLinearSweep::SetGrainJitterPercentage);
+
+    ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "input_stream"), "set_input_stream", "get_input_stream");
+    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "sweeping_parameter", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverParameter"), "set_sweeping_parameter", "get_sweeping_parameter");
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "min_parameter_value"), "set_min_parameter_value", "get_min_parameter_value");
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "max_parameter_value"), "set_max_parameter_value", "get_max_parameter_value");
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "min_grain_size_milliseconds"), "set_min_grain_size_milliseconds", "get_min_grain_size_milliseconds");
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "max_grain_size_milliseconds"), "set_max_grain_size_milliseconds", "get_max_grain_size_milliseconds");
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "grain_jitter_percentage"), "set_grain_jitter_percentage", "get_grain_jitter_percentage");
+}
+
+class StreamWeaverOutputGranularLinearSweepRuntime : public StreamWeaverOutputRuntimeInstanceBase
+{
+public:
+    float min_parameter_value;
+	float max_parameter_value;
+	float min_grain_size_milliseconds = 20;
+	float max_grain_size_milliseconds = 20;
+	int mix_rate = 44100;
+	float grain_jitter_percent = 0.01f;
+	int grain_fade_window_samples = 50;
+    StreamWeaverParameterRuntimeInstance* sweeping_parameter;
+	Ref<RandomNumberGenerator> randomizer;
+	PackedVector2Array grain_buffer;
+
+	float total_num_samples;
+	float min_grain_samples;
+	float max_grain_samples;
+	float total_num_grains_in_input;
+	float linear_step_grains;
+	float current_jitter_offset = 0.0f;
+	static constexpr int NUM_NO_REPEAT_GRAINS = 8;
+	int last_played_grains[NUM_NO_REPEAT_GRAINS];
+	inline bool is_repeat(int grain_number) {
+		for (int i = 0; i < NUM_NO_REPEAT_GRAINS; i++) { if (grain_number == last_played_grains[i]) return true; }
+		return false;
+	}
+	void initialize_grain_calculation() {
+		for (int i = 0; i < NUM_NO_REPEAT_GRAINS; i++) { last_played_grains[i] = 0; }
+		total_num_samples = grain_buffer.size();
+		min_grain_samples = Math::floor(min_grain_size_milliseconds * mix_rate / 1000.0f);
+		max_grain_samples = Math::floor(max_grain_size_milliseconds * mix_rate / 1000.0f);
+		total_num_grains_in_input = (2.0f * total_num_samples)
+			/ (min_grain_samples + max_grain_samples);
+		linear_step_grains = (max_grain_samples - min_grain_samples) / (total_num_grains_in_input - 1.0f);
+	}
+	int get_grain_number(float factor) {
+		if (min_grain_samples == max_grain_samples) {
+			return Math::floor(total_num_grains_in_input * factor);
+		}
+		float sample_index = factor * total_num_samples;
+		float a = min_grain_samples - linear_step_grains / 2.0f;
+		float grain_number = (-a + Math::sqrt(a*a + 2.0f * linear_step_grains * sample_index)) / linear_step_grains;
+		return Math::floor(grain_number);
+	}
+	int get_grain_start_index(int grain_number) {
+		float grain_float = static_cast<float>(grain_number);
+		return Math::floor( (linear_step_grains / 2.0f) * grain_float * grain_float +
+			(min_grain_samples - linear_step_grains / 2.0f) * grain_float );
+	}
+	int get_grain_size(int grain_number) {
+		return min_grain_samples + static_cast<float>(grain_number) * linear_step_grains;
+	}
+
+	struct ActiveGrainData {
+		int grain_number;
+		int input_start;
+		float current_frame_number;
+		int number_of_samples;
+		int elapsed_samples;
+	};
+	ActiveGrainData CurrentGrain;
+	ActiveGrainData NextGrain;
+
+	void trigger() override {
+		// we just sweep forever, no triggering neccessary
+	}
+
+	bool mix_output_into_buffer(AudioFrame *p_buffer, int32_t p_frames) override {
+		PROFILE_FUNCTION();
+		for (int frame_index = 0; frame_index < p_frames; frame_index++) {
+			float current_volume = 1.0f;
+			float next_volume = 0.0f;
+			int remaining_in_current = CurrentGrain.number_of_samples - CurrentGrain.elapsed_samples;
+			if (remaining_in_current == grain_fade_window_samples) {
+				// start up the next grain!
+				NextGrain = spawn_new_grain();
+			}
+			if (remaining_in_current <= grain_fade_window_samples) {
+				float factor_to_next = 1.0f - Math::inverse_lerp(0.0f, grain_fade_window_samples, remaining_in_current);
+				current_volume = Math::sqrt(1.0f - factor_to_next);
+				next_volume = Math::sqrt(factor_to_next);
+			}
+
+			int current_buffer_index = CurrentGrain.input_start + CurrentGrain.elapsed_samples;
+			p_buffer[frame_index].left += grain_buffer[current_buffer_index].x * current_volume;
+			p_buffer[frame_index].right += grain_buffer[current_buffer_index].y * current_volume;
+			CurrentGrain.elapsed_samples ++;
+			if (next_volume > 0.0f) {
+				int next_buffer_index = NextGrain.input_start + NextGrain.elapsed_samples;
+				p_buffer[frame_index].left += grain_buffer[next_buffer_index].x * next_volume;
+				p_buffer[frame_index].right += grain_buffer[next_buffer_index].y * next_volume;
+				NextGrain.elapsed_samples ++;
+			}
+			if (CurrentGrain.elapsed_samples >= CurrentGrain.number_of_samples) {
+				// the fade to the next has been completed, let's swap!
+				CurrentGrain = NextGrain;
+			}
+		}
+
+		return true;
+	}
+
+	ActiveGrainData spawn_new_grain() {
+		PROFILE_FUNCTION();
+		float parameter_as_fraction = Math::inverse_lerp(min_parameter_value, max_parameter_value, sweeping_parameter->get_value());
+		// we'll randomize the fraction a little, to get variance...
+		current_jitter_offset += 0.1f * randomizer->randf_range(-grain_jitter_percent, grain_jitter_percent);
+		current_jitter_offset = Math::clamp(current_jitter_offset, -grain_jitter_percent, grain_jitter_percent);
+		parameter_as_fraction += current_jitter_offset;
+		parameter_as_fraction = Math::clamp(parameter_as_fraction, 0.0f, 1.0f);
+
+		int grain_number = get_grain_number(parameter_as_fraction);
+		while (grain_number >= total_num_grains_in_input-1 || is_repeat(grain_number)) {
+			if (grain_number >= total_num_grains_in_input-1) {
+				grain_number -= 1;
+			}
+			else {
+				grain_number += randomizer->randi_range(-2, 2);
+				if (grain_number < 0) grain_number = 1;
+			}
+		}
+		for (int i = 0; i < NUM_NO_REPEAT_GRAINS - 1; ++i) {
+			last_played_grains[i] = last_played_grains[i + 1];
+		}
+		last_played_grains[NUM_NO_REPEAT_GRAINS - 1] = grain_number;
+		int start_frame = get_grain_start_index(grain_number);
+		int num_frames = get_grain_size(grain_number);
+
+		ActiveGrainData d{};
+		d.grain_number = grain_number;
+		d.input_start = start_frame;
+		d.current_frame_number = 0;
+		d.number_of_samples = num_frames;
+		d.elapsed_samples = 0;
+		return d;
+	}
+};
+
+StreamWeaverOutputRuntimeInstanceBase* StreamWeaverOutputGranularLinearSweep::create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) {
+    PROFILE_FUNCTION();
+    auto* instance = new StreamWeaverOutputGranularLinearSweepRuntime();
+    initialize_runtime_instance_base( instance, from_playback );
+    instance->sweeping_parameter = from_playback->get_parameter_runtime_instance(sweeping_parameter);
+    auto playback = input_stream->GetAudioStream()->instantiate_playback();
+    if (playback != nullptr)
+    {
+        playback->start();
+        int num_samples = input_stream->GetAudioStream()->get_length() * AudioServer::get_singleton()->get_mix_rate();
+        instance->grain_buffer = playback->mix_audio(1.0f, num_samples);
+    }
+    instance->min_parameter_value = min_parameter_value;
+    instance->max_parameter_value = max_parameter_value;
+    instance->min_grain_size_milliseconds = min_grain_size_milliseconds;
+    instance->max_grain_size_milliseconds = max_grain_size_milliseconds;
+    instance->grain_jitter_percent = grain_jitter_percentage;
+    static int random_seed = 74637;
+    random_seed += 24462;
+    instance->randomizer.instantiate();
+    instance->randomizer->set_seed(random_seed);
+    instance->initialize_grain_calculation();
+    instance->CurrentGrain = instance->spawn_new_grain();
+
+    return instance;
+}
+
+void StreamWeaverOutputGranularLinearSweep::release_runtime_instance(StreamWeaverOutputRuntimeInstanceBase *instance) {
+	memdelete(dynamic_cast<StreamWeaverOutputGranularLinearSweepRuntime*>(instance));
 }
 
 // -------------------- StreamWeaverAudioStream --------------------

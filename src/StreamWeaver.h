@@ -162,6 +162,41 @@ public:
     void release_runtime_instance(StreamWeaverParameterRuntimeInstance* instance) override;
 };
 
+class StreamWeaverParameterWindow : public StreamWeaverParameter
+{
+    GDCLASS(StreamWeaverParameterWindow, StreamWeaverParameter)
+    static void _bind_methods();
+public:
+    enum InterpolationType {
+        LINEAR,
+        QUADRATIC,
+        SMOOTHSTEP,
+        CUBIC, // Good for audio volume
+    };
+private:
+    godot::Ref<StreamWeaverParameter> input_parameter;
+    float min_value = 0.0;
+    float max_value = 1.0;
+    float value_interpolation_window = 0.1;
+    InterpolationType interpolation_type = LINEAR;
+
+public:
+    [[nodiscard]] godot::Ref<StreamWeaverParameter> GetInputParameter() const { return input_parameter; }
+    void SetInputParameter(godot::Ref<StreamWeaverParameter> p_input_parameter) { input_parameter = p_input_parameter; }
+    [[nodiscard]] float GetMinValue() const { return min_value; }
+    void SetMinValue(float p_min_value) { min_value = p_min_value; }
+    [[nodiscard]] float GetMaxValue() const { return max_value; }
+    void SetMaxValue(float p_max_value) { max_value = p_max_value; }
+    [[nodiscard]] float GetValueInterpolationWindow() const { return value_interpolation_window; }
+    void SetValueInterpolationWindow(float p_window) { value_interpolation_window = p_window; }
+    [[nodiscard]] InterpolationType GetInterpolationType() const { return interpolation_type; }
+    void SetInterpolationType(InterpolationType p_type) { interpolation_type = p_type; }
+
+    StreamWeaverParameterRuntimeInstance* create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
+    void release_runtime_instance(StreamWeaverParameterRuntimeInstance* instance) override;
+};
+VARIANT_ENUM_CAST(StreamWeaverParameterWindow::InterpolationType);
+
 
 class StreamWeaverRuntimeTriggerableInterface
 {
@@ -399,41 +434,45 @@ class StreamWeaverOutputLooping : public StreamWeaverOutput {
 
 	static void _bind_methods();
 
-
-	godot::StringName input_stream;
-	godot::Ref<StreamWeaverParameterInput> modifying_parameter;
-	float min_volume = 0;
-	float max_volume = 0;
-	float parameter_value_min_volume;
-	float parameter_value_max_volume;
-	float min_pitch = 1;
-	float max_pitch = 1;
-	float parameter_value_min_pitch;
-	float parameter_value_max_pitch;
+	godot::Ref<StreamWeaverInputStream> input_stream;
 public:
-	[[nodiscard]] godot::StringName GetInputStream() const { return input_stream; }
-	void SetInputStream(godot::StringName inputStream) { input_stream = inputStream; }
-	[[nodiscard]] godot::Ref<StreamWeaverParameterInput> GetModifyingParameter() const { return modifying_parameter; }
-	void SetModifyingParameter(godot::Ref<StreamWeaverParameterInput> modifyingParameter) { modifying_parameter = modifyingParameter; }
-	[[nodiscard]] float GetMinVolume() const { return min_volume; }
-	void SetMinVolume(float minVolume) { min_volume = minVolume; }
-	[[nodiscard]] float GetMaxVolume() const { return max_volume; }
-	void SetMaxVolume(float maxVolume) { max_volume = maxVolume; }
-	[[nodiscard]] float GetParameterValueMinVolume() const { return parameter_value_min_volume; }
-	void SetParameterValueMinVolume(float parameterValueMinVolume) { parameter_value_min_volume = parameterValueMinVolume; }
-	[[nodiscard]] float GetParameterValueMaxVolume() const { return parameter_value_max_volume; }
-	void SetParameterValueMaxVolume(float parameterValueMaxVolume) { parameter_value_max_volume = parameterValueMaxVolume; }
-	[[nodiscard]] float GetMinPitch() const { return min_pitch; }
-	void SetMinPitch(float minPitch) { min_pitch = minPitch; }
-	[[nodiscard]] float GetMaxPitch() const { return max_pitch; }
-	void SetMaxPitch(float maxPitch) { max_pitch = maxPitch; }
-	[[nodiscard]] float GetParameterValueMinPitch() const { return parameter_value_min_pitch; }
-	void SetParameterValueMinPitch(float parameterValueMinPitch) { parameter_value_min_pitch = parameterValueMinPitch; }
-	[[nodiscard]] float GetParameterValueMaxPitch() const { return parameter_value_max_pitch; }
-	void SetParameterValueMaxPitch(float parameterValueMaxPitch) { parameter_value_max_pitch = parameterValueMaxPitch; }
+	[[nodiscard]] godot::Ref<StreamWeaverInputStream> GetInputStream() const { return input_stream; }
+	void SetInputStream(godot::Ref<StreamWeaverInputStream> inputStream) { input_stream = inputStream; }
 
 	StreamWeaverOutputRuntimeInstanceBase *create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
 	void release_runtime_instance(StreamWeaverOutputRuntimeInstanceBase *instance) override;
+};
+
+class StreamWeaverOutputGranularLinearSweep : public StreamWeaverOutput {
+    GDCLASS(StreamWeaverOutputGranularLinearSweep, StreamWeaverOutput)
+
+    static void _bind_methods();
+
+    godot::Ref<StreamWeaverInputStream> input_stream;
+    godot::Ref<StreamWeaverParameter> sweeping_parameter;
+    float min_parameter_value;
+    float max_parameter_value;
+    float min_grain_size_milliseconds = 20;
+    float max_grain_size_milliseconds = 20;
+    float grain_jitter_percentage = 0.01f;
+public:
+    godot::Ref<StreamWeaverInputStream> GetInputStream() const { return input_stream; }
+    void SetInputStream(godot::Ref<StreamWeaverInputStream> inputStream) { input_stream = inputStream; }
+    godot::Ref<StreamWeaverParameter> GetSweepingParameter() const { return sweeping_parameter; }
+    void SetSweepingParameter(godot::Ref<StreamWeaverParameter> sweepingParameter) { sweeping_parameter = sweepingParameter; }
+    float GetMinParameterValue() const { return min_parameter_value; }
+    void SetMinParameterValue(float minParameterValue) { min_parameter_value = minParameterValue; }
+    float GetMaxParameterValue() const { return max_parameter_value; }
+    void SetMaxParameterValue(float maxParameterValue) { max_parameter_value = maxParameterValue; }
+    float GetMinGrainSizeMilliseconds() const { return min_grain_size_milliseconds; }
+    void SetMinGrainSizeMilliseconds(float minGrainSizeMilliseconds) { min_grain_size_milliseconds = minGrainSizeMilliseconds; }
+    float GetMaxGrainSizeMilliseconds() const { return max_grain_size_milliseconds; }
+    void SetMaxGrainSizeMilliseconds(float maxGrainSizeMilliseconds) { max_grain_size_milliseconds = maxGrainSizeMilliseconds; }
+    float GetGrainJitterPercentage() const { return grain_jitter_percentage; }
+    void SetGrainJitterPercentage(float grainJitterPercentage) { grain_jitter_percentage = grainJitterPercentage; }
+
+    StreamWeaverOutputRuntimeInstanceBase *create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
+    void release_runtime_instance(StreamWeaverOutputRuntimeInstanceBase *instance) override;
 };
 
 

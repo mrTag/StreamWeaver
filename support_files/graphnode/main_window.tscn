@@ -1,0 +1,74 @@
+[gd_scene format=3 uid="uid://cv0y4omxi6v2s"]
+
+[ext_resource type="Script" uid="uid://ekbawiynuu7q" path="res://addons/streamweaver/graphnode/graph_edit.gd" id="1_u5icf"]
+[ext_resource type="Script" uid="uid://c3uv5v0wbjlil" path="res://addons/streamweaver/graphnode/stream_tester.gd" id="2_j1tki"]
+
+[sub_resource type="GDScript" id="GDScript_u5icf"]
+resource_name = "StreamWeaverMainWindow"
+script/source = "@tool
+extends PanelContainer
+
+var current_res:StreamWeaverAudioStream
+
+func _ready() -> void:
+	%Tabs.tab_changed.connect(on_tab_changed)
+
+func edit_streamweaver_resource(res:StreamWeaverAudioStream):
+	current_res = res
+	if res:
+		%GraphEdit.edit_streamweaver_resource(res)
+	%Tabs.current_tab = 0
+	%EditBlocker.visible = res == null
+
+func on_tab_changed(tab_index:int):
+	if tab_index == 1:
+		%StreamTester.test_stream_weaver_stream(current_res)
+"
+
+[node name="PanelContainer" type="PanelContainer" unique_id=1561786263]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+script = SubResource("GDScript_u5icf")
+
+[node name="Tabs" type="TabContainer" parent="." unique_id=2111485480]
+unique_name_in_owner = true
+layout_mode = 2
+current_tab = 0
+
+[node name="GraphEdit" type="GraphEdit" parent="Tabs" unique_id=2098956953]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+scroll_offset = Vector2(0, -31)
+right_disconnects = true
+minimap_enabled = false
+script = ExtResource("1_u5icf")
+metadata/_tab_index = 0
+
+[node name="StreamTester" type="Control" parent="Tabs" unique_id=1883827501]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+script = ExtResource("2_j1tki")
+metadata/_tab_index = 1
+
+[node name="EditBlocker" type="Panel" parent="." unique_id=1127952509]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Label" type="Label" parent="EditBlocker" unique_id=231684392]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Select a StreamWeaverAudioStream resource to edit it here"
+horizontal_alignment = 1
+vertical_alignment = 1
