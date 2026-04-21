@@ -79,6 +79,13 @@ func test_stream_weaver_stream(s:StreamWeaverAudioStream):
 			name_label.custom_minimum_size = Vector2(150, 0)
 			hbox.add_child(name_label)
 			
+			var spinbox := SpinBox.new()
+			spinbox.min_value = p.min_value
+			spinbox.max_value = p.max_value
+			spinbox.step = 1.0
+			spinbox.value = p.start_value
+			hbox.add_child(spinbox)
+			
 			var slider = HSlider.new()
 			slider.min_value = p.min_value
 			slider.max_value = p.max_value
@@ -87,6 +94,12 @@ func test_stream_weaver_stream(s:StreamWeaverAudioStream):
 			slider.custom_minimum_size = Vector2(100, 0)
 			slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			slider.value_changed.connect(func(val):
+				spinbox.set_value_no_signal(val)
+				if playback:
+					playback.set_parameter(p.parameter_name, val)
+			)
+			spinbox.value_changed.connect(func(val):
+				slider.set_value_no_signal(val)
 				if playback:
 					playback.set_parameter(p.parameter_name, val)
 			)

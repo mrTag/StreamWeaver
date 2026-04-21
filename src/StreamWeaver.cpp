@@ -5,6 +5,8 @@
 
 #include "profiling.h"
 
+#include <algorithm>
+
 using namespace godot;
 
 // -------------------- StreamWeaverInputStream --------------------
@@ -1106,6 +1108,447 @@ StreamWeaverOutputRuntimeInstanceBase* StreamWeaverOutputGranularLinearSweep::cr
 
 void StreamWeaverOutputGranularLinearSweep::release_runtime_instance(StreamWeaverOutputRuntimeInstanceBase *instance) {
 	memdelete(dynamic_cast<StreamWeaverOutputGranularLinearSweepRuntime*>(instance));
+}
+
+// -------------------- StreamWeaverOutputGranularDatabase --------------------
+
+void StreamWeaverOutputGranularDatabase::_bind_methods() {
+    ClassDB::bind_method(D_METHOD("get_grains_database"), &StreamWeaverOutputGranularDatabase::GetGrainsDatabase);
+    ClassDB::bind_method(D_METHOD("set_grains_database", "database"), &StreamWeaverOutputGranularDatabase::SetGrainsDatabase);
+    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "grains_database", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverGrainsDatabase"),
+        "set_grains_database", "get_grains_database");
+
+    ClassDB::bind_method(D_METHOD("get_axis_parameters"), &StreamWeaverOutputGranularDatabase::GetAxisParameters);
+    ClassDB::bind_method(D_METHOD("set_axis_parameters", "params"), &StreamWeaverOutputGranularDatabase::SetAxisParameters);
+    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "axis_parameters", PROPERTY_HINT_ARRAY_TYPE, "StreamWeaverParameter"),
+        "set_axis_parameters", "get_axis_parameters");
+
+    ClassDB::bind_method(D_METHOD("get_pitch_correction_enabled"), &StreamWeaverOutputGranularDatabase::GetPitchCorrectionEnabled);
+    ClassDB::bind_method(D_METHOD("set_pitch_correction_enabled", "enabled"), &StreamWeaverOutputGranularDatabase::SetPitchCorrectionEnabled);
+    ADD_PROPERTY(PropertyInfo(Variant::BOOL, "pitch_correction_enabled"),
+        "set_pitch_correction_enabled", "get_pitch_correction_enabled");
+
+    ClassDB::bind_method(D_METHOD("get_no_repeat_count"), &StreamWeaverOutputGranularDatabase::GetNoRepeatCount);
+    ClassDB::bind_method(D_METHOD("set_no_repeat_count", "count"), &StreamWeaverOutputGranularDatabase::SetNoRepeatCount);
+    ADD_PROPERTY(PropertyInfo(Variant::INT, "no_repeat_count", PROPERTY_HINT_RANGE, "1,32,1"),
+        "set_no_repeat_count", "get_no_repeat_count");
+
+    ClassDB::bind_method(D_METHOD("get_candidate_pool_size"), &StreamWeaverOutputGranularDatabase::GetCandidatePoolSize);
+    ClassDB::bind_method(D_METHOD("set_candidate_pool_size", "size"), &StreamWeaverOutputGranularDatabase::SetCandidatePoolSize);
+    ADD_PROPERTY(PropertyInfo(Variant::INT, "candidate_pool_size", PROPERTY_HINT_RANGE, "4,128,1"),
+        "set_candidate_pool_size", "get_candidate_pool_size");
+
+    ClassDB::bind_method(D_METHOD("get_search_param_smoothing"), &StreamWeaverOutputGranularDatabase::GetSearchParamSmoothing);
+    ClassDB::bind_method(D_METHOD("set_search_param_smoothing", "smoothing"), &StreamWeaverOutputGranularDatabase::SetSearchParamSmoothing);
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "search_param_smoothing", PROPERTY_HINT_RANGE, "0,1,0.01"),
+        "set_search_param_smoothing", "get_search_param_smoothing");
+
+    ClassDB::bind_method(D_METHOD("get_shortlist_score_window"), &StreamWeaverOutputGranularDatabase::GetShortlistScoreWindow);
+    ClassDB::bind_method(D_METHOD("set_shortlist_score_window", "window"), &StreamWeaverOutputGranularDatabase::SetShortlistScoreWindow);
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "shortlist_score_window", PROPERTY_HINT_RANGE, "0,12,0.05"),
+        "set_shortlist_score_window", "get_shortlist_score_window");
+
+    ClassDB::bind_method(D_METHOD("get_continuity_bias"), &StreamWeaverOutputGranularDatabase::GetContinuityBias);
+    ClassDB::bind_method(D_METHOD("set_continuity_bias", "bias"), &StreamWeaverOutputGranularDatabase::SetContinuityBias);
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "continuity_bias", PROPERTY_HINT_RANGE, "0,4,0.01"),
+        "set_continuity_bias", "get_continuity_bias");
+
+    ClassDB::bind_method(D_METHOD("get_random_selection_span"), &StreamWeaverOutputGranularDatabase::GetRandomSelectionSpan);
+    ClassDB::bind_method(D_METHOD("set_random_selection_span", "span"), &StreamWeaverOutputGranularDatabase::SetRandomSelectionSpan);
+    ADD_PROPERTY(PropertyInfo(Variant::INT, "random_selection_span", PROPERTY_HINT_RANGE, "0,32,1"),
+        "set_random_selection_span", "get_random_selection_span");
+
+    ClassDB::bind_method(D_METHOD("get_random_walk_step"), &StreamWeaverOutputGranularDatabase::GetRandomWalkStep);
+    ClassDB::bind_method(D_METHOD("set_random_walk_step", "step"), &StreamWeaverOutputGranularDatabase::SetRandomWalkStep);
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "random_walk_step", PROPERTY_HINT_RANGE, "0,8,0.05"),
+        "set_random_walk_step", "get_random_walk_step");
+
+    ClassDB::bind_method(D_METHOD("get_random_walk_damping"), &StreamWeaverOutputGranularDatabase::GetRandomWalkDamping);
+    ClassDB::bind_method(D_METHOD("set_random_walk_damping", "damping"), &StreamWeaverOutputGranularDatabase::SetRandomWalkDamping);
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "random_walk_damping", PROPERTY_HINT_RANGE, "0,1,0.01"),
+        "set_random_walk_damping", "get_random_walk_damping");
+
+    ClassDB::bind_method(D_METHOD("get_preferred_match_bias"), &StreamWeaverOutputGranularDatabase::GetPreferredMatchBias);
+    ClassDB::bind_method(D_METHOD("set_preferred_match_bias", "bias"), &StreamWeaverOutputGranularDatabase::SetPreferredMatchBias);
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "preferred_match_bias", PROPERTY_HINT_RANGE, "0,4,0.01"),
+        "set_preferred_match_bias", "get_preferred_match_bias");
+}
+
+class StreamWeaverOutputGranularDatabaseRuntime : public StreamWeaverOutputRuntimeInstanceBase {
+public:
+    struct RankedCandidate {
+        int idx = -1;
+        float score = 0.0f;
+    };
+
+    StreamWeaverGrainsDatabase* db = nullptr;
+    // Sized to db->get_num_axes(). Entries may be nullptr where the user
+    // hasn't wired up that axis — we substitute the axis midpoint.
+    LocalVector<StreamWeaverParameterRuntimeInstance*> axis_param_instances;
+    bool pitch_correction_enabled = false;
+    Ref<RandomNumberGenerator> rng;
+
+    float synthesis_phase = 0.0f;
+    float smoothed_target_f0 = 0.0f;
+    float overlap_read_index = 0.0f;
+    std::vector<float> overlap_buffer;
+    PackedFloat32Array smoothed_search_params;
+    int last_selected_unit = -1;
+    bool has_primed_output = false;
+    float selection_jitter_state = 0.0f;
+    static constexpr int MAX_NO_REPEAT = 32;
+    int no_repeat_count = 8;
+    int candidate_pool_size = 24;
+    float search_param_smoothing = 0.08f;
+    float shortlist_score_window = 1.5f;
+    float continuity_bias = 0.5f;
+    int random_selection_span = 3;
+    float random_walk_step = 0.85f;
+    float random_walk_damping = 0.6f;
+    float preferred_match_bias = 0.75f;
+    int last_played[MAX_NO_REPEAT] = {};
+
+    bool is_repeat(int idx) const {
+        int active_no_repeat = CLAMP(no_repeat_count, 1, MAX_NO_REPEAT);
+        for (int i = 0; i < active_no_repeat; ++i) {
+            if (last_played[i] == idx) return true;
+        }
+        return false;
+    }
+
+    void record_played(int idx) {
+        int active_no_repeat = CLAMP(no_repeat_count, 1, MAX_NO_REPEAT);
+        for (int i = 0; i < active_no_repeat - 1; ++i) {
+            last_played[i] = last_played[i + 1];
+        }
+        last_played[active_no_repeat - 1] = idx;
+    }
+
+    PackedFloat32Array build_search_params() const {
+        int num_axes = db ? db->get_num_axes() : 0;
+        PackedFloat32Array params;
+        params.resize(num_axes);
+        for (int i = 0; i < num_axes; ++i) {
+            StreamWeaverParameterRuntimeInstance* inst = (i < static_cast<int>(axis_param_instances.size()))
+                ? axis_param_instances[i] : nullptr;
+            if (inst) {
+                params[i] = inst->get_value();
+            } else {
+                params[i] = 0.5f * (db->get_axis_min(i) + db->get_axis_max(i));
+            }
+        }
+        return params;
+    }
+
+    PackedFloat32Array get_smoothed_search_params() {
+        PackedFloat32Array raw = build_search_params();
+        if (smoothed_search_params.size() != raw.size()) {
+            smoothed_search_params = raw;
+            return smoothed_search_params;
+        }
+
+        for (int i = 0; i < raw.size(); ++i) {
+            smoothed_search_params[i] = Math::lerp(smoothed_search_params[i], raw[i], search_param_smoothing);
+        }
+        return smoothed_search_params;
+    }
+
+    int select_new_grain(const PackedFloat32Array& params, float target_f0_hint) {
+        if (!db || db->get_grain_count() == 0) return -1;
+
+        // Ask for more candidates than the no-repeat buffer so the
+        // anti-repeat logic actually has options.
+        int effective_pool_size = std::max(candidate_pool_size, no_repeat_count + 1);
+        PackedInt32Array candidates = db->find_nearest_grains(params, effective_pool_size);
+
+        std::vector<RankedCandidate> ranked_candidates;
+        ranked_candidates.reserve(candidates.size());
+        float last_time = -1.0f;
+        if (last_selected_unit >= 0 && last_selected_unit < db->get_grain_count()) {
+            last_time = db->get_grain_entry(last_selected_unit).original_time_s;
+        }
+        for (int i = 0; i < candidates.size(); ++i) {
+            int idx = candidates[i];
+            if (idx < 0 || idx >= db->get_grain_count()) continue;
+            const auto& candidate = db->get_grain_entry(idx);
+            float score = static_cast<float>(i);
+            if (is_repeat(idx)) {
+                score += 1000.0f;
+            }
+            if (candidate.low_energy) {
+                score += 25.0f;
+            }
+            if (target_f0_hint > 0.0f && candidate.fundamental_hz > 0.0f) {
+                score += 8.0f * std::abs(std::log2(candidate.fundamental_hz / target_f0_hint));
+            }
+            if (last_time >= 0.0f) {
+                score += continuity_bias * std::abs(candidate.original_time_s - last_time);
+            }
+            ranked_candidates.push_back({idx, score});
+        }
+
+        if (ranked_candidates.empty()) {
+            return -1;
+        }
+
+        std::sort(ranked_candidates.begin(), ranked_candidates.end(), [](const RankedCandidate& a, const RankedCandidate& b) {
+            if (a.score == b.score) return a.idx < b.idx;
+            return a.score < b.score;
+        });
+
+        float best_score = ranked_candidates[0].score;
+        std::vector<RankedCandidate> shortlist;
+        shortlist.reserve(ranked_candidates.size());
+        for (const RankedCandidate& candidate : ranked_candidates) {
+            if (candidate.score <= best_score + shortlist_score_window) {
+                shortlist.push_back(candidate);
+            }
+        }
+        if (shortlist.empty()) {
+            shortlist.push_back(ranked_candidates[0]);
+        }
+
+        int eligible_count = static_cast<int>(shortlist.size());
+        if (random_selection_span > 0) {
+            eligible_count = std::min(eligible_count, random_selection_span + 1);
+        }
+        eligible_count = std::max(1, eligible_count);
+
+        std::vector<RankedCandidate> eligible_candidates;
+        eligible_candidates.reserve(eligible_count);
+        for (int i = 0; i < eligible_count; ++i) {
+            eligible_candidates.push_back(shortlist[i]);
+        }
+
+        float guard_window = std::max(0.0f, preferred_match_bias);
+        if (guard_window > 0.0f) {
+            std::vector<RankedCandidate> guarded_candidates;
+            guarded_candidates.reserve(eligible_candidates.size());
+            for (const RankedCandidate& candidate : eligible_candidates) {
+                if (candidate.score <= best_score + guard_window) {
+                    guarded_candidates.push_back(candidate);
+                }
+            }
+            if (!guarded_candidates.empty()) {
+                eligible_candidates.swap(guarded_candidates);
+            }
+        }
+
+        int chosen = eligible_candidates[0].idx;
+        if (eligible_candidates.size() > 1 && rng.is_valid()) {
+            selection_jitter_state = selection_jitter_state * random_walk_damping
+                + rng->randf_range(-random_walk_step, random_walk_step);
+
+            float random_temperature = 0.35f + std::abs(selection_jitter_state);
+            float total_weight = 0.0f;
+            std::vector<float> weights;
+            weights.reserve(eligible_candidates.size());
+            for (const RankedCandidate& candidate : eligible_candidates) {
+                float relative_score = std::max(0.0f, candidate.score - best_score);
+                float weight = Math::exp(-relative_score / std::max(0.05f, random_temperature));
+                weights.push_back(weight);
+                total_weight += weight;
+            }
+
+            if (total_weight > 0.0f) {
+                float pick = rng->randf() * total_weight;
+                for (int i = 0; i < static_cast<int>(eligible_candidates.size()); ++i) {
+                    pick -= weights[i];
+                    if (pick <= 0.0f) {
+                        chosen = eligible_candidates[i].idx;
+                        break;
+                    }
+                }
+            }
+        } else {
+            selection_jitter_state = 0.0f;
+        }
+
+        if (chosen < 0) return -1;
+
+        record_played(chosen);
+        last_selected_unit = chosen;
+        return chosen;
+    }
+
+    float get_target_f0() const {
+        if (!db) return 0.0f;
+        PackedFloat32Array params = build_search_params();
+        if (pitch_correction_enabled) {
+            float estimated = db->estimate_f0_for_params(params, std::max(8, no_repeat_count * 2));
+            if (estimated > 0.0f) {
+                return estimated;
+            }
+        }
+        float sum_f0 = 0.0f;
+        int count = 0;
+        int active_no_repeat = CLAMP(no_repeat_count, 1, MAX_NO_REPEAT);
+        for (int i = 0; i < active_no_repeat; ++i) {
+            int idx = last_played[i];
+            if (idx >= 0 && idx < db->get_grain_count()) {
+                float f0 = db->get_grain_entry(idx).fundamental_hz;
+                if (f0 > 0.0f) {
+                    sum_f0 += f0;
+                    ++count;
+                }
+            }
+        }
+        if (count > 0) return sum_f0 / static_cast<float>(count);
+        if (db->get_grain_count() > 0) {
+            return std::max(1.0f, db->get_grain_entry(0).fundamental_hz);
+        }
+        return 0.0f;
+    }
+
+    void ensure_overlap_capacity(int frames_needed) {
+        if (frames_needed <= 0) return;
+        if (static_cast<int>(overlap_buffer.size()) < frames_needed) {
+            overlap_buffer.resize(frames_needed, 0.0f);
+        }
+    }
+
+    void trigger_unit() {
+        if (!db) return;
+        PackedFloat32Array params = get_smoothed_search_params();
+        float target_f0_hint = get_target_f0();
+        int unit_index = select_new_grain(params, target_f0_hint);
+        if (unit_index < 0) return;
+
+        const auto& entry = db->get_grain_entry(unit_index);
+        if (entry.fundamental_hz <= 0.0f) return;
+
+        int period_samples = std::max(1, static_cast<int>(std::round(db->get_sample_rate() / entry.fundamental_hz)));
+        int window_size = std::max(2, period_samples * 2);
+        int half_window = window_size / 2;
+        int input_start = entry.center_sample - half_window;
+        const float* pcm = db->get_pcm_pool_ptr();
+        int pcm_size = db->get_pcm_pool_size();
+        int output_center = static_cast<int>(std::round(overlap_read_index));
+        if (!has_primed_output) {
+            output_center += half_window;
+            has_primed_output = true;
+        }
+
+        int output_start = output_center - half_window;
+        int output_end = output_start + window_size;
+
+        if (output_end <= 0) return;
+        ensure_overlap_capacity(output_end);
+
+        for (int i = 0; i < window_size; ++i) {
+            int src_index = input_start + i;
+            int dst_index = output_start + i;
+            if (dst_index < 0 || dst_index >= static_cast<int>(overlap_buffer.size())) continue;
+
+            float sample = 0.0f;
+            if (src_index >= 0 && src_index < pcm_size) {
+                sample = pcm[src_index];
+            }
+
+            float phase = (window_size > 1) ? static_cast<float>(i) / static_cast<float>(window_size - 1) : 0.0f;
+            float window = 0.5f * (1.0f - std::cos(2.0f * Math_PI * phase));
+            overlap_buffer[dst_index] += sample * window;
+        }
+
+        smoothed_target_f0 = entry.fundamental_hz;
+    }
+
+    void trigger() override {
+        // Continuous output, no triggering needed
+    }
+
+    bool mix_output_into_buffer(AudioFrame* p_buffer, int32_t p_frames) override {
+        PROFILE_FUNCTION();
+        if (!db || db->get_grain_count() == 0) return false;
+
+        float vol = get_volume();
+        ensure_overlap_capacity(p_frames + 2048);
+
+        for (int frame_index = 0; frame_index < p_frames; ++frame_index) {
+            float target_f0 = get_target_f0();
+            if (target_f0 > 0.0f) {
+                if (smoothed_target_f0 <= 0.0f) {
+                    smoothed_target_f0 = target_f0;
+                } else {
+                    smoothed_target_f0 = Math::lerp(smoothed_target_f0, target_f0, 0.0015f);
+                }
+            }
+            if (db->get_sample_rate() > 0.0f && smoothed_target_f0 > 0.0f) {
+                synthesis_phase += smoothed_target_f0 / db->get_sample_rate();
+                while (synthesis_phase >= 1.0f) {
+                    synthesis_phase -= 1.0f;
+                    trigger_unit();
+                }
+            }
+
+            ensure_overlap_capacity(static_cast<int>(std::ceil(overlap_read_index)) + 2);
+            int read_index = static_cast<int>(overlap_read_index);
+            float sample = 0.0f;
+            if (read_index >= 0 && read_index < static_cast<int>(overlap_buffer.size())) {
+                sample = overlap_buffer[read_index];
+                overlap_buffer[read_index] = 0.0f;
+            }
+
+            float out = sample * vol;
+            p_buffer[frame_index].left += out;
+            p_buffer[frame_index].right += out;
+            overlap_read_index += 1.0f;
+        }
+        return true;
+    }
+};
+
+StreamWeaverOutputRuntimeInstanceBase* StreamWeaverOutputGranularDatabase::create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) {
+    PROFILE_FUNCTION();
+    if (grains_database.is_null() || grains_database->get_grain_count() == 0) return nullptr;
+
+    auto* instance = new StreamWeaverOutputGranularDatabaseRuntime();
+    initialize_runtime_instance_base(instance, from_playback);
+    instance->db = grains_database.ptr();
+    instance->pitch_correction_enabled = pitch_correction_enabled;
+    instance->no_repeat_count = CLAMP(no_repeat_count, 1, StreamWeaverOutputGranularDatabaseRuntime::MAX_NO_REPEAT);
+    instance->candidate_pool_size = std::max(candidate_pool_size, instance->no_repeat_count + 1);
+    instance->search_param_smoothing = Math::clamp(search_param_smoothing, 0.0f, 1.0f);
+    instance->shortlist_score_window = std::max(0.0f, shortlist_score_window);
+    instance->continuity_bias = std::max(0.0f, continuity_bias);
+    instance->random_selection_span = std::max(0, random_selection_span);
+    instance->random_walk_step = std::max(0.0f, random_walk_step);
+    instance->random_walk_damping = Math::clamp(random_walk_damping, 0.0f, 1.0f);
+    instance->preferred_match_bias = std::max(0.0f, preferred_match_bias);
+
+    // Set up axis parameter runtime instances. Keep them aligned to the
+    // database's axis indices so a missing wiring does not shift other
+    // axes' values into the wrong slot.
+    int num_axes = grains_database->get_num_axes();
+    instance->axis_param_instances.resize(num_axes);
+    for (int i = 0; i < num_axes; ++i) {
+        StreamWeaverParameterRuntimeInstance* runtime_inst = nullptr;
+        if (i < axis_parameters.size()) {
+            Ref<StreamWeaverParameter> param = axis_parameters[i];
+            if (param.is_valid()) {
+                runtime_inst = from_playback->get_parameter_runtime_instance(param);
+            }
+        }
+        instance->axis_param_instances[i] = runtime_inst;
+    }
+
+    static int random_seed = 98321;
+    random_seed += 17453;
+    instance->rng.instantiate();
+    instance->rng->set_seed(random_seed);
+
+    // Initialize anti-repeat state and overlap buffer for PSOLA synthesis.
+    for (int i = 0; i < StreamWeaverOutputGranularDatabaseRuntime::MAX_NO_REPEAT; ++i) {
+        instance->last_played[i] = -1;
+    }
+    instance->overlap_buffer.resize(4096, 0.0f);
+    instance->trigger_unit();
+
+    return instance;
+}
+
+void StreamWeaverOutputGranularDatabase::release_runtime_instance(StreamWeaverOutputRuntimeInstanceBase* instance) {
+    memdelete(dynamic_cast<StreamWeaverOutputGranularDatabaseRuntime*>(instance));
 }
 
 // -------------------- StreamWeaverAudioStream --------------------

@@ -4,11 +4,13 @@ class_name OutputGranularLinearSweepGraphNode extends GraphNode
 # ports are not slots! port indices are only the enabled slots counted from 0.
 const LEFT_PORT_INPUT_STREAM : int = 0
 const LEFT_PORT_SWEEPING_PARAMETER : int = 1
+const LEFT_PORT_VOLUME_PARAMETER : int = 2
 
 
 var current_resource: StreamWeaverOutputGranularLinearSweep
 
 @onready var name_edit : LineEdit = %NameEdit
+@onready var base_volume : SpinBox = %BaseVolume
 @onready var min_parameter_value : SpinBox = %MinParameterValue
 @onready var max_parameter_value : SpinBox = %MaxParameterValue
 @onready var min_grain_size : SpinBox = %MinGrainSize
@@ -17,6 +19,7 @@ var current_resource: StreamWeaverOutputGranularLinearSweep
 
 func _ready():
 	name_edit.text_changed.connect(_on_name_changed)
+	base_volume.value_changed.connect(_on_base_volume_changed)
 	min_parameter_value.value_changed.connect(_on_min_parameter_value_changed)
 	max_parameter_value.value_changed.connect(_on_max_parameter_value_changed)
 	min_grain_size.value_changed.connect(_on_min_grain_size_changed)
@@ -51,12 +54,15 @@ func remove_from_stream_weaver_audio_stream(audio_stream_resource: Resource):
 func get_left_port_connections() -> Dictionary[int, Array]:
 	var connections : Dictionary[int, Array] = {
 		LEFT_PORT_INPUT_STREAM: Array(),
-		LEFT_PORT_SWEEPING_PARAMETER: Array()
+		LEFT_PORT_SWEEPING_PARAMETER: Array(),
+		LEFT_PORT_VOLUME_PARAMETER : Array()
 	}
 	if current_resource.input_stream:
 		connections[LEFT_PORT_INPUT_STREAM].append(current_resource.input_stream)
 	if current_resource.sweeping_parameter:
 		connections[LEFT_PORT_SWEEPING_PARAMETER].append(current_resource.sweeping_parameter)
+	if current_resource.volume_multiplier:
+		connections[LEFT_PORT_VOLUME_PARAMETER].append(current_resource.volume_multiplier)
 	return connections
 
 # this is always evaluated on the input port!
@@ -79,6 +85,15 @@ func connect_to(other: GraphNode, other_port: int, this_port: int, only_check:bo
 				if not only_check:
 					current_resource.sweeping_parameter = res
 				return true
+	elif this_port == LEFT_PORT_VOLUME_PARAMETER:
+		if other.has_method("get_resource_for_right_port"):
+			var res = other.get_resource_for_right_port(other_port)
+			if res is StreamWeaverParameter:
+				if current_resource.volume_multiplier:
+					return false
+				if not only_check:
+					current_resource.volume_multiplier = res
+				return true
 		
 	return false
 
@@ -96,6 +111,11 @@ func disconnect_from(other: GraphNode, other_port: int, this_port: int):
 			var res = other.get_resource_for_right_port(other_port)
 			if res == current_resource.sweeping_parameter:
 				current_resource.sweeping_parameter = null
+	elif this_port == LEFT_PORT_VOLUME_PARAMETER:
+		if other.has_method("get_resource_for_right_port"):
+			var res = other.get_resource_for_right_port(other_port)
+			if res == current_resource.volume_multiplier:
+				current_resource.volume_multiplier = null
 
 func _on_name_changed(_new_name):
 	if current_resource and current_resource.output_name != name_edit.text:
@@ -105,6 +125,16 @@ func _on_name_changed(_new_name):
 		undo_redo.add_do_property(current_resource, "resource_name", name_edit.text)
 		undo_redo.add_undo_property(current_resource, "resource_name", current_resource.output_name)
 		undo_redo.add_undo_property(current_resource, "output_name", current_resource.output_name)
+		undo_redo.add_do_method(self, "_update_ui")
+		undo_redo.add_undo_method(self, "_update_ui")
+		undo_redo.commit_action()
+
+func _on_base_volume_changed(value: float):
+	if current_resource and current_resource.base_volume_db != value:
+		var undo_redo = EditorInterface.get_editor_undo_redo()
+		undo_redo.create_action("Change Output Base Volume")
+		undo_redo.add_do_property(current_resource, "base_volume_db", value)
+		undo_redo.add_undo_property(current_resource, "base_volume_db", current_resource.base_volume_db)
 		undo_redo.add_do_method(self, "_update_ui")
 		undo_redo.add_undo_method(self, "_update_ui")
 		undo_redo.commit_action()
@@ -174,6 +204,8 @@ func _update_ui():
 		if name_edit.text != current_resource.output_name:
 			name_edit.text = current_resource.output_name
 		
+		if base_volume.value != current_resource.base_volume_db:
+			base_volume.value = current_resource.base_volume_db
 		if min_parameter_value.value != current_resource.min_parameter_value:
 			min_parameter_value.value = current_resource.min_parameter_value
 		if max_parameter_value.value != current_resource.max_parameter_value:

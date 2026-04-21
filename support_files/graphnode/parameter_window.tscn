@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://b3w7x6q5r4y8"]
 
-[ext_resource type="Script" uid="uid://dusy1haswy7nt" path="res://addons/streamweaver/graphnode/parameter_window_graph_node.gd" id="1_window"]
+[ext_resource type="Script" uid="uid://dusy1haswy7nt" path="res://addons/StreamWeaver/graphnode/parameter_window_graph_node.gd" id="1_window"]
 
 [node name="ParameterWindow" type="GraphNode" unique_id=1922839914]
 offset_right = 250.0

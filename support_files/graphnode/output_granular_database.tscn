@@ -1,0 +1,130 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/StreamWeaver/graphnode/output_granular_database_graph_node.gd" id="1_db"]
+
+[node name="OutputGranularDatabase" type="GraphNode"]
+offset_right = 260.0
+offset_bottom = 350.0
+title = "Output Granular Database"
+slot/8/left_enabled = true
+slot/8/left_type = 1
+slot/8/left_color = Color(0.81960785, 0.57254905, 0, 1)
+slot/8/left_icon = null
+slot/8/right_enabled = false
+slot/8/right_type = 0
+slot/8/right_color = Color(1, 1, 1, 1)
+slot/8/right_icon = null
+slot/8/draw_stylebox = true
+script = ExtResource("1_db")
+
+[node name="NameEdit" type="LineEdit" parent="."]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 35)
+layout_mode = 2
+placeholder_text = "Output Name"
+
+[node name="HSeparator" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="BaseVolume" type="SpinBox" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = -80.0
+max_value = 20.0
+step = 0.5
+prefix = "Base Volume:"
+suffix = "dB"
+
+[node name="PitchCorrection" type="CheckBox" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Pitch Correction"
+
+[node name="NoRepeatCount" type="SpinBox" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 1.0
+max_value = 32.0
+step = 1.0
+prefix = "No Repeat:"
+
+[node name="CandidatePoolSize" type="SpinBox" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 4.0
+max_value = 128.0
+step = 1.0
+prefix = "Candidate Pool:"
+
+[node name="SearchParamSmoothing" type="SpinBox" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 1.0
+step = 0.01
+prefix = "Param Smoothing:"
+
+[node name="ShortlistScoreWindow" type="SpinBox" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 20.0
+step = 0.05
+prefix = "Shortlist Window:"
+
+[node name="ContinuityBias" type="SpinBox" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 4.0
+step = 0.01
+prefix = "Continuity Bias:"
+
+[node name="RandomSelectionSpan" type="SpinBox" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 32.0
+step = 1.0
+prefix = "Random Span:"
+
+[node name="RandomWalkStep" type="SpinBox" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 32.0
+step = 0.05
+prefix = "Random Step:"
+
+[node name="RandomWalkDamping" type="SpinBox" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 1.0
+step = 0.01
+prefix = "Random Damping:"
+
+[node name="PreferredMatchBias" type="SpinBox" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+max_value = 4.0
+step = 0.01
+prefix = "Best-Match Bias:"
+
+[node name="HSeparator2" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="DatabasePicker" type="EditorResourcePicker" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+base_type = "StreamWeaverGrainsDatabase"
+
+[node name="DatabaseLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Database: (none)"
+
+[node name="HSeparator3" type="HSeparator" parent="."]
+layout_mode = 2
+
+[node name="VolumeMultiplierLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Vol. Mult. Parameter"
+
+[node name="HSeparator4" type="HSeparator" parent="."]
+layout_mode = 2

@@ -15,6 +15,7 @@ var node_types := {
 	"Output Randomize": preload("res://addons/streamweaver/graphnode/output_randomize.tscn"),
 	"Output Looping": preload("res://addons/streamweaver/graphnode/output_loop.tscn"),
 	"Output Granular Sweep": preload("res://addons/streamweaver/graphnode/output_granular_linear_sweep.tscn"),
+	"Output Granular Database": preload("res://addons/streamweaver/graphnode/output_granular_database.tscn"),
 	"Parameter Add": preload("res://addons/streamweaver/graphnode/parameter_add.tscn"),
 	"Parameter Multiply": preload("res://addons/streamweaver/graphnode/parameter_multiply.tscn"),
 	"Parameter Follow": preload("res://addons/streamweaver/graphnode/parameter_follow.tscn"),
@@ -43,6 +44,8 @@ func _create_resource_for_node_type(node_type_name: String) -> Resource:
 			return OutputLoopingGraphNode.create_new_resource(current_resource)
 		"Output Granular Sweep":
 			return OutputGranularLinearSweepGraphNode.create_new_resource(current_resource)
+		"Output Granular Database":
+			return OutputGranularDatabaseGraphNode.create_new_resource(current_resource)
 		"Parameter Add":
 			return ParameterAddGraphNode.create_new_resource(current_resource)
 		"Parameter Multiply":
@@ -66,6 +69,7 @@ func _get_node_type_for_resource(res: Resource) -> String:
 	if res is StreamWeaverOutputRandomize: return "Output Randomize"
 	if res is StreamWeaverOutputLooping: return "Output Looping"
 	if res is StreamWeaverOutputGranularLinearSweep: return "Output Granular Sweep"
+	if res is StreamWeaverOutputGranularDatabase: return "Output Granular Database"
 	if res is StreamWeaverParameterAdd: return "Parameter Add"
 	if res is StreamWeaverParameterMultiply: return "Parameter Multiply"
 	if res is StreamWeaverParameterFollowInput: return "Parameter Follow"
@@ -270,6 +274,7 @@ func edit_streamweaver_resource(streamweaver_resource: StreamWeaverAudioStream):
 		"Output Randomize": current_resource.outputs,
 		"Output Looping": current_resource.outputs,
 		"Output Granular Sweep": current_resource.outputs,
+		"Output Granular Database": current_resource.outputs,
 		"Parameter Add": current_resource.parameters,
 		"Parameter Multiply": current_resource.parameters,
 		"Parameter Follow": current_resource.parameters,

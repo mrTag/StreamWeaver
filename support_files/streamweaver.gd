@@ -2,8 +2,10 @@
 extends EditorPlugin
 
 const MainPanel = preload("res://addons/streamweaver/graphnode/main_window.tscn")
+const GrainsDatabaseWindow = preload("res://addons/streamweaver/graphnode/grains_database_window.gd")
 
 var main_panel_instance
+var grains_window_instance: Window
 
 func _has_main_screen():
 	return true
@@ -26,10 +28,23 @@ func _enter_tree():
 	# Hide the main panel. Very much required.
 	_make_visible(false)
 
+	add_tool_menu_item("StreamWeaver: Grains Database Editor…", _open_grains_database_window)
+
 
 func _exit_tree():
 	if main_panel_instance:
 		main_panel_instance.queue_free()
+	if grains_window_instance:
+		grains_window_instance.queue_free()
+		grains_window_instance = null
+	remove_tool_menu_item("StreamWeaver: Grains Database Editor…")
+
+
+func _open_grains_database_window() -> void:
+	if grains_window_instance == null:
+		grains_window_instance = GrainsDatabaseWindow.new()
+		EditorInterface.get_base_control().add_child(grains_window_instance)
+	grains_window_instance.popup_centered(Vector2i(1100, 700))
 
 
 func _make_visible(visible):

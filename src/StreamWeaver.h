@@ -6,6 +6,8 @@
 #include "godot_cpp/templates/hash_map.hpp"
 #include "godot_cpp/templates/local_vector.hpp"
 
+#include "GrainsDatabaseResource.h"
+
 using chrono_clock = std::chrono::steady_clock;
 using fseconds = std::chrono::duration<float>;
 
@@ -470,6 +472,54 @@ public:
     void SetMaxGrainSizeMilliseconds(float maxGrainSizeMilliseconds) { max_grain_size_milliseconds = maxGrainSizeMilliseconds; }
     float GetGrainJitterPercentage() const { return grain_jitter_percentage; }
     void SetGrainJitterPercentage(float grainJitterPercentage) { grain_jitter_percentage = grainJitterPercentage; }
+
+    StreamWeaverOutputRuntimeInstanceBase *create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
+    void release_runtime_instance(StreamWeaverOutputRuntimeInstanceBase *instance) override;
+};
+
+class StreamWeaverOutputGranularDatabase : public StreamWeaverOutput {
+    GDCLASS(StreamWeaverOutputGranularDatabase, StreamWeaverOutput)
+
+    static void _bind_methods();
+
+    godot::Ref<StreamWeaverGrainsDatabase> grains_database;
+    godot::TypedArray<godot::Ref<StreamWeaverParameter>> axis_parameters;
+    bool pitch_correction_enabled = true;
+    int no_repeat_count = 8;
+    int candidate_pool_size = 24;
+    float search_param_smoothing = 0.03f;
+    float shortlist_score_window = 12.0f;
+    float continuity_bias = 1.0f;
+    int random_selection_span = 32;
+    float random_walk_step = 5.0f;
+    float random_walk_damping = 0.5f;
+    float preferred_match_bias = 0.0f;
+
+public:
+    godot::Ref<StreamWeaverGrainsDatabase> GetGrainsDatabase() const { return grains_database; }
+    void SetGrainsDatabase(godot::Ref<StreamWeaverGrainsDatabase> db) { grains_database = db; }
+    godot::TypedArray<godot::Ref<StreamWeaverParameter>> GetAxisParameters() const { return axis_parameters; }
+    void SetAxisParameters(godot::TypedArray<godot::Ref<StreamWeaverParameter>> params) { axis_parameters = params; }
+    bool GetPitchCorrectionEnabled() const { return pitch_correction_enabled; }
+    void SetPitchCorrectionEnabled(bool enabled) { pitch_correction_enabled = enabled; }
+    int GetNoRepeatCount() const { return no_repeat_count; }
+    void SetNoRepeatCount(int count) { no_repeat_count = count; }
+    int GetCandidatePoolSize() const { return candidate_pool_size; }
+    void SetCandidatePoolSize(int size) { candidate_pool_size = size; }
+    float GetSearchParamSmoothing() const { return search_param_smoothing; }
+    void SetSearchParamSmoothing(float smoothing) { search_param_smoothing = smoothing; }
+    float GetShortlistScoreWindow() const { return shortlist_score_window; }
+    void SetShortlistScoreWindow(float window) { shortlist_score_window = window; }
+    float GetContinuityBias() const { return continuity_bias; }
+    void SetContinuityBias(float bias) { continuity_bias = bias; }
+    int GetRandomSelectionSpan() const { return random_selection_span; }
+    void SetRandomSelectionSpan(int span) { random_selection_span = span; }
+    float GetRandomWalkStep() const { return random_walk_step; }
+    void SetRandomWalkStep(float step) { random_walk_step = step; }
+    float GetRandomWalkDamping() const { return random_walk_damping; }
+    void SetRandomWalkDamping(float damping) { random_walk_damping = damping; }
+    float GetPreferredMatchBias() const { return preferred_match_bias; }
+    void SetPreferredMatchBias(float bias) { preferred_match_bias = bias; }
 
     StreamWeaverOutputRuntimeInstanceBase *create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
     void release_runtime_instance(StreamWeaverOutputRuntimeInstanceBase *instance) override;

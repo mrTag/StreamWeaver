@@ -7,6 +7,8 @@
 #include "godot_cpp/godot.hpp"
 
 #include "StreamWeaver.h"
+#include "StreamWeaverFFT.h"
+#include "GrainsDatabaseResource.h"
 
 /// @file
 /// Register our classes with Godot.
@@ -46,10 +48,13 @@ namespace
         godot::ClassDB::register_class<StreamWeaverOutputRandomize>();
         godot::ClassDB::register_class<StreamWeaverOutputLooping>();
         godot::ClassDB::register_class<StreamWeaverOutputGranularLinearSweep>();
+        godot::ClassDB::register_class<StreamWeaverOutputGranularDatabase>();
 
         godot::ClassDB::register_class<StreamWeaverAudioStream>();
         godot::ClassDB::register_class<StreamWeaverAudioStreamPlayback>();
 
+        godot::ClassDB::register_class<StreamWeaverFFT>();
+        godot::ClassDB::register_class<StreamWeaverGrainsDatabase>();
     }
 
     /// @brief Called by Godot to let us do any cleanup.

@@ -160,16 +160,23 @@ if (PROFILING_ENABLED)
     add_compile_definitions(PROFILING_ENABLED)
 endif()
 
+set(KISSFFT_STATIC ON CACHE BOOL "Build kissfft as static (ON) or shared library (OFF)" FORCE)
+set(KISSFFT_TEST OFF CACHE BOOL "Build kissfft tests" FORCE)
+set(KISSFFT_TOOLS OFF CACHE BOOL "Build kissfft command-line tools" FORCE)
+add_subdirectory(extern/kissfft)
+
 
 if (UNIX)
     target_link_libraries( ${PROJECT_NAME}
         PRIVATE
             godot-cpp
+            kissfft
     )
 else ()
     target_link_libraries( ${PROJECT_NAME}
             PRIVATE
             godot-cpp
             $<$<BOOL:${PROFILING_ENABLED}>:TracyClient>
+            kissfft
     )
 endif ()
