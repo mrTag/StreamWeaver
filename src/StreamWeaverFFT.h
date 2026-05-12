@@ -5,6 +5,7 @@
 #include "godot_cpp/classes/audio_stream_wav.hpp"
 #include "godot_cpp/classes/image.hpp"
 #include "godot_cpp/classes/ref_counted.hpp"
+#include "godot_cpp/variant/dictionary.hpp"
 #include "godot_cpp/variant/packed_float32_array.hpp"
 #include "godot_cpp/variant/packed_vector2_array.hpp"
 
@@ -37,12 +38,35 @@ class StreamWeaverFFT : public godot::RefCounted {
     // Decimated mono PCM, used for reconstruction.
     std::vector<float> mono_pcm;
 
+    // Original unfiltered mono PCM at the source sample rate, used for waveform display.
+    std::vector<float> original_mono_pcm;
+
+    // Cached onset-function debug from the most recent detect_low_freq_cycles
+    // call. Populated for visualisation; mutable so the detector can stay
+    // const. Empty until the first run.
+    mutable std::vector<float> last_onset_fn;
+    mutable std::vector<float> last_threshold;
+    mutable int last_onset_frame_lo = 0;
+    mutable int last_onset_frame_hi = 0;
+
+    // Cached track-fundamental debug from the most recent track_fundamental
+    // call: per-frame harmonic-mean observation (dB) along the tracked path,
+    // the seed peak, and the stop threshold. Lets the editor visualise why
+    // tracking terminated where it did (energy below seed_peak - 20 dB).
+    mutable std::vector<float> last_track_obs;
+    mutable float last_track_seed_peak = 0.f;
+    mutable float last_track_stop_thresh = 0.f;
+    mutable int last_track_frame_lo = 0;
+    mutable int last_track_frame_hi = -1;
+    mutable int last_track_start_frame = 0;
+
     // Current display transform settings (applied to produce `image`).
     float display_db_min = -80;
     float display_db_max = 0;
     float gamma_value = 1.0f;
     bool per_frame_normalize = false;
     bool spectral_whiten = false;
+    bool log_hz = true;
 
     godot::Ref<godot::Image> image;
 
@@ -64,7 +88,8 @@ public:
         float p_display_db_max,
         float p_gamma,
         bool p_per_frame_normalize,
-        bool p_spectral_whiten);
+        bool p_spectral_whiten,
+        bool p_log_hz);
 
     // Returns (p5, p99.5) of the transformed spectrogram, suitable as sensible
     // default values for display_db_min and display_db_max.
@@ -95,6 +120,11 @@ public:
     // round(k*b). sketch_hint (optional) is a (time, hz) polyline the user
     // drew over the spectrogram; frames inside its time range get an extra
     // linear cost pulling the path toward the sketched fundamental.
+    // stop_drop_db sets the gap threshold: frames whose harmonic-mean obs
+    // drops more than stop_drop_db below the seed peak are tagged as gaps in
+    // the output (Vector2(time, -1) sentinel) instead of terminating the walk,
+    // so tracking can resume when the signal returns. With a sketch hint
+    // present, the walk follows the sketch through the gap.
     godot::PackedVector2Array track_fundamental(
         float start_time_s,
         godot::PackedVector2Array harmonic_picks,
@@ -102,18 +132,57 @@ public:
         float max_slope_hz_per_sec,
         float transition_penalty,
         godot::PackedVector2Array sketch_hint,
-        float sketch_weight) const;
+        float sketch_weight,
+        float stop_drop_db) const;
 
     // STFT bin-masking reconstruction.
     godot::Ref<godot::AudioStreamWAV> reconstruct_isolated(
         godot::PackedVector2Array tracked_curve,
         float bandwidth_hz) const;
 
+    // Time-domain onset detection for very low fundamentals (sub-100 Hz)
+    // where FFT bin resolution is coarser than the fundamental and
+    // Viterbi tracking on harmonics is unreliable. Detects peaks in a
+    // mid-band spectral-energy envelope, enforces a refractory period of
+    // 1 / hz_max between onsets, and returns one (time_seconds, hz) per
+    // detected cycle, where hz = 1 / inter-onset interval. sensitivity is
+    // 0..1 (higher = more onsets pass the adaptive threshold). sketch_hint,
+    // if non-empty, rejects onsets whose IOI-derived hz lies outside [0.5x,
+    // 2x] of the sketched hz at that time (gap sentinels y<=0 supported).
+    godot::PackedVector2Array detect_low_freq_cycles(
+        float start_time_s,
+        float end_time_s,
+        float hz_min,
+        float hz_max,
+        float sensitivity,
+        godot::PackedVector2Array sketch_hint) const;
+
     // Raw PCM access for grain extraction.
     const std::vector<float>& get_mono_pcm() const { return mono_pcm; }
+    // GDScript-accessible version of get_mono_pcm().
+    godot::PackedFloat32Array get_mono_pcm_packed() const;
+    // Original unfiltered PCM at source sample rate, for waveform display.
+    godot::PackedFloat32Array get_original_mono_pcm_packed() const;
+    // Total duration in seconds.
+    float get_total_duration() const { return static_cast<float>(num_frames) * seconds_per_frame; }
     int get_num_frames() const { return num_frames; }
     int get_num_bins() const { return num_bins; }
     const std::vector<float>& get_full_mag_db() const { return full_mag_db; }
+
+    // Onset-detection debug snapshot from the last detect_low_freq_cycles
+    // call. Returns a Dictionary with PackedFloat32Arrays "onset_fn" and
+    // "threshold" (both length = frame_hi - frame_lo + 1), plus the integer
+    // bounds "frame_lo" / "frame_hi" and the float "seconds_per_frame".
+    // Empty Dictionary if detection has not been run.
+    godot::Dictionary get_last_onset_debug() const;
+
+    // Tracker debug snapshot from the last track_fundamental call. Returns a
+    // Dictionary with PackedFloat32Array "obs" (harmonic-mean observation in
+    // dB along the tracked path, length = frame_hi - frame_lo + 1), floats
+    // "seed_peak", "stop_thresh", "seconds_per_frame", "analysis_db_floor",
+    // and ints "frame_lo", "frame_hi", "start_frame". Empty Dictionary if
+    // tracking has not been run.
+    godot::Dictionary get_last_track_debug() const;
 };
 
 #endif

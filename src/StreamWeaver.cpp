@@ -1194,7 +1194,6 @@ public:
     std::vector<float> overlap_buffer;
     PackedFloat32Array smoothed_search_params;
     int last_selected_unit = -1;
-    bool has_primed_output = false;
     float selection_jitter_state = 0.0f;
     static constexpr int MAX_NO_REPEAT = 32;
     int no_repeat_count = 8;
@@ -1253,7 +1252,7 @@ public:
         return smoothed_search_params;
     }
 
-    int select_new_grain(const PackedFloat32Array& params, float target_f0_hint) {
+    int select_new_grain(const PackedFloat32Array& params, float target_f0_hint, int current_index) {
         if (!db || db->get_grain_count() == 0) return -1;
 
         // Ask for more candidates than the no-repeat buffer so the
@@ -1283,6 +1282,10 @@ public:
             }
             if (last_time >= 0.0f) {
                 score += continuity_bias * std::abs(candidate.original_time_s - last_time);
+            }
+            if (i == current_index + 1)
+            {
+                score += 2000.0f;
             }
             ranked_candidates.push_back({idx, score});
         }
@@ -1411,25 +1414,32 @@ public:
         if (!db) return;
         PackedFloat32Array params = get_smoothed_search_params();
         float target_f0_hint = get_target_f0();
-        int unit_index = select_new_grain(params, target_f0_hint);
+        int unit_index = select_new_grain(params, target_f0_hint, last_selected_unit);
         if (unit_index < 0) return;
 
         const auto& entry = db->get_grain_entry(unit_index);
         if (entry.fundamental_hz <= 0.0f) return;
 
-        int period_samples = std::max(1, static_cast<int>(std::round(db->get_sample_rate() / entry.fundamental_hz)));
+        // Window must be sized to the rate that fired *this* trigger (smoothed_target_f0),
+        // not the selected grain's stored f0. The trigger spacing equals
+        // sample_rate / smoothed_target_f0, so half_window must equal that same
+        // period for the Hann overlap-add to sum to constant amplitude (COLA).
+        // This holds for both constant-rate databases and sweeps — the one-grain
+        // lag when f0 changes is inaudible because Hann edges are near zero.
+        float window_f0 = (smoothed_target_f0 > 0.0f) ? smoothed_target_f0 : entry.fundamental_hz;
+        int period_samples = std::max(1, static_cast<int>(std::round(db->get_sample_rate() / window_f0)));
         int window_size = std::max(2, period_samples * 2);
         int half_window = window_size / 2;
         int input_start = entry.center_sample - half_window;
-        const float* pcm = db->get_pcm_pool_ptr();
-        int pcm_size = db->get_pcm_pool_size();
-        int output_center = static_cast<int>(std::round(overlap_read_index));
-        if (!has_primed_output) {
-            output_center += half_window;
-            has_primed_output = true;
-        }
-
+        int pcm_size = db->pcm_sample_count();
+        // Place the grain center half_window samples ahead of the current
+        // read position so its ascending Hann half lands on unread samples
+        // and overlaps with the previous grain's descending half.
+        int output_center = static_cast<int>(std::round(overlap_read_index)) + half_window;
         int output_start = output_center - half_window;
+        int output_jitter_samples = std::clamp(half_window / 20, 100, 200);
+        int jitter_samples = rng->randi_range(-output_jitter_samples, output_jitter_samples);
+        output_jitter_samples += jitter_samples;
         int output_end = output_start + window_size;
 
         if (output_end <= 0) return;
@@ -1442,15 +1452,13 @@ public:
 
             float sample = 0.0f;
             if (src_index >= 0 && src_index < pcm_size) {
-                sample = pcm[src_index];
+                sample = db->decode_sample(src_index);
             }
 
             float phase = (window_size > 1) ? static_cast<float>(i) / static_cast<float>(window_size - 1) : 0.0f;
             float window = 0.5f * (1.0f - std::cos(2.0f * Math_PI * phase));
             overlap_buffer[dst_index] += sample * window;
         }
-
-        smoothed_target_f0 = entry.fundamental_hz;
     }
 
     void trigger() override {
@@ -1493,6 +1501,23 @@ public:
             p_buffer[frame_index].left += out;
             p_buffer[frame_index].right += out;
             overlap_read_index += 1.0f;
+        }
+
+        // Compact the overlap buffer so it stays bounded. Without this, both
+        // overlap_read_index and overlap_buffer grow for the lifetime of the
+        // playback, since ensure_overlap_capacity only ever grows the vector.
+        constexpr int compact_threshold = 8192;
+        int read_pos = static_cast<int>(overlap_read_index);
+        if (read_pos > compact_threshold) {
+            int buf_size = static_cast<int>(overlap_buffer.size());
+            int remaining = buf_size - read_pos;
+            if (remaining > 0) {
+                std::copy(overlap_buffer.begin() + read_pos, overlap_buffer.end(), overlap_buffer.begin());
+                overlap_buffer.resize(remaining);
+            } else {
+                overlap_buffer.clear();
+            }
+            overlap_read_index -= static_cast<float>(read_pos);
         }
         return true;
     }
