@@ -1195,9 +1195,10 @@ public:
 
     float synthesis_phase = 0.0f;
     float smoothed_target_f0 = 0.0f;
-    float overlap_read_index = 0.0f;
+    int overlap_read_index = 0;
     std::vector<float> overlap_buffer;
     PackedFloat32Array smoothed_search_params;
+    PackedFloat32Array search_params_scratch;
     int last_selected_unit = -1;
     int last_grain_output_center = -1;
     int last_grain_half_window = -1;
@@ -1230,24 +1231,25 @@ public:
         last_played[active_no_repeat - 1] = idx;
     }
 
-    PackedFloat32Array build_search_params() const {
+    const PackedFloat32Array& build_search_params() {
         int num_axes = db ? db->get_num_axes() : 0;
-        PackedFloat32Array params;
-        params.resize(num_axes);
+        if (search_params_scratch.size() != num_axes) {
+            search_params_scratch.resize(num_axes);
+        }
         for (int i = 0; i < num_axes; ++i) {
             StreamWeaverParameterRuntimeInstance* inst = (i < static_cast<int>(axis_param_instances.size()))
                 ? axis_param_instances[i] : nullptr;
             if (inst) {
-                params[i] = inst->get_value();
+                search_params_scratch[i] = inst->get_value();
             } else {
-                params[i] = 0.5f * (db->get_axis_min(i) + db->get_axis_max(i));
+                search_params_scratch[i] = 0.5f * (db->get_axis_min(i) + db->get_axis_max(i));
             }
         }
-        return params;
+        return search_params_scratch;
     }
 
-    PackedFloat32Array get_smoothed_search_params() {
-        PackedFloat32Array raw = build_search_params();
+    const PackedFloat32Array& get_smoothed_search_params() {
+        const PackedFloat32Array& raw = build_search_params();
         if (smoothed_search_params.size() != raw.size()) {
             smoothed_search_params = raw;
             return smoothed_search_params;
@@ -1385,9 +1387,9 @@ public:
         return chosen;
     }
 
-    float get_target_f0() const {
+    float get_target_f0() {
         if (!db) return 0.0f;
-        PackedFloat32Array params = build_search_params();
+        const PackedFloat32Array& params = build_search_params();
         if (pitch_correction_enabled) {
             float estimated = db->estimate_f0_for_params(params, std::max(8, no_repeat_count * 2));
             if (estimated > 0.0f) {
@@ -1424,7 +1426,7 @@ public:
     void trigger_unit() {
         PROFILE_FUNCTION();
         if (!db) return;
-        PackedFloat32Array params = get_smoothed_search_params();
+        const PackedFloat32Array& params = get_smoothed_search_params();
         float target_f0_hint = get_target_f0();
         int unit_index = select_new_grain(params, target_f0_hint, last_selected_unit);
         if (unit_index < 0) return;
@@ -1452,10 +1454,9 @@ public:
         // was already consumed, to avoid writing to zeroed slots.
         int output_start;
         if (last_grain_output_center < 0) {
-            output_start = static_cast<int>(std::round(overlap_read_index));
+            output_start = overlap_read_index;
         } else {
-            output_start = std::max(last_grain_output_center,
-                                    static_cast<int>(std::round(overlap_read_index)));
+            output_start = std::max(last_grain_output_center, overlap_read_index);
         }
         // The peak of the asymmetric window (ascending→descending boundary) is
         // the "center" tracked for the next grain's placement.
@@ -1500,37 +1501,45 @@ public:
         if (!db || db->get_grain_count() == 0) return false;
 
         begin_volume_block(p_frames);
-        ensure_overlap_capacity(p_frames + 2048);
+
+        const float sample_rate = db->get_sample_rate();
+        const float inv_sample_rate = (sample_rate > 0.0f) ? 1.0f / sample_rate : 0.0f;
+
+        float target_f0 = get_target_f0();
+        if (target_f0 > 0.0f) {
+            if (smoothed_target_f0 <= 0.0f) {
+                smoothed_target_f0 = target_f0;
+            } else {
+                const float block_alpha = 1.0f - std::pow(1.0f - 0.0015f, static_cast<float>(p_frames));
+                smoothed_target_f0 = Math::lerp(smoothed_target_f0, target_f0, block_alpha);
+            }
+        }
+
+        const bool do_trigger = (inv_sample_rate > 0.0f && smoothed_target_f0 > 0.0f);
+        const float phase_increment = do_trigger ? (smoothed_target_f0 * inv_sample_rate) : 0.0f;
+
+        ensure_overlap_capacity(overlap_read_index + p_frames + 2048);
 
         for (int frame_index = 0; frame_index < p_frames; ++frame_index) {
-            float target_f0 = get_target_f0();
-            if (target_f0 > 0.0f) {
-                if (smoothed_target_f0 <= 0.0f) {
-                    smoothed_target_f0 = target_f0;
-                } else {
-                    smoothed_target_f0 = Math::lerp(smoothed_target_f0, target_f0, 0.0015f);
-                }
-            }
-            if (db->get_sample_rate() > 0.0f && smoothed_target_f0 > 0.0f) {
-                synthesis_phase += smoothed_target_f0 / db->get_sample_rate();
+            if (do_trigger) {
+                synthesis_phase += phase_increment;
                 while (synthesis_phase >= 1.0f) {
                     synthesis_phase -= 1.0f;
                     trigger_unit();
                 }
             }
 
-            ensure_overlap_capacity(static_cast<int>(std::ceil(overlap_read_index)) + 2);
-            int read_index = static_cast<int>(overlap_read_index);
-            float sample = 0.0f;
-            if (read_index >= 0 && read_index < static_cast<int>(overlap_buffer.size())) {
-                sample = overlap_buffer[read_index];
-                overlap_buffer[read_index] = 0.0f;
-            }
+            // trigger_unit may have called ensure_overlap_capacity and
+            // reallocated, so re-fetch the pointer each frame after a possible
+            // trigger. In the common no-trigger case this is just a load.
+            float* slot = overlap_buffer.data() + overlap_read_index;
+            float sample = *slot;
+            *slot = 0.0f;
 
             float out = sample * volume_at(frame_index);
             p_buffer[frame_index].left += out;
             p_buffer[frame_index].right += out;
-            overlap_read_index += 1.0f;
+            ++overlap_read_index;
         }
         end_volume_block(p_frames);
 
@@ -1538,8 +1547,8 @@ public:
         // overlap_read_index and overlap_buffer grow for the lifetime of the
         // playback, since ensure_overlap_capacity only ever grows the vector.
         constexpr int compact_threshold = 8192;
-        int read_pos = static_cast<int>(overlap_read_index);
-        if (read_pos > compact_threshold) {
+        if (overlap_read_index > compact_threshold) {
+            int read_pos = overlap_read_index;
             int buf_size = static_cast<int>(overlap_buffer.size());
             int remaining = buf_size - read_pos;
             if (remaining > 0) {
@@ -1548,7 +1557,7 @@ public:
             } else {
                 overlap_buffer.clear();
             }
-            overlap_read_index -= static_cast<float>(read_pos);
+            overlap_read_index = 0;
             if (last_grain_output_center >= 0)
                 last_grain_output_center -= read_pos;
         }
