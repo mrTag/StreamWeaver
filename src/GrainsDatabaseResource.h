@@ -82,7 +82,8 @@ private:
     void rebuild_2d_index();
 
     // Interpolation helper for tracked curve
-    static float lookup_curve(const godot::PackedVector2Array& curve, float time_s);
+    static float lookup_curve(const godot::PackedVector2Array& curve, float time_s,
+                               bool treat_zero_as_gap = false);
 
     // Resampling helper
     static std::vector<float> resample_linear(const std::vector<float>& src, float src_rate, float dst_rate);

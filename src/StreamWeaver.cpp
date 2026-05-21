@@ -817,14 +817,14 @@ public:
 		PROFILE_FUNCTION();
 		size_t current_input_index = 0;
 	    float pitch = get_pitch();
-	    float volume = get_volume();
+	    begin_volume_block(p_frames);
 		while (current_input_index < currently_playing_inputs.size()) {
 			auto& cpi = currently_playing_inputs[current_input_index];
 			auto mixed_input = cpi.playback->mix_audio(pitch + cpi.pitch_offset, p_frames);
 		    int num_frames_mixed = Math::min( p_frames, static_cast<int32_t>( mixed_input.size() ) );
 			for (int i = 0; i < num_frames_mixed; i++) {
-				p_buffer[i].left += mixed_input[i].x * (volume + cpi.volume_offset);
-				p_buffer[i].right += mixed_input[i].y * (volume + cpi.volume_offset);
+				p_buffer[i].left += mixed_input[i].x * (volume_at(i) + cpi.volume_offset);
+				p_buffer[i].right += mixed_input[i].y * (volume_at(i) + cpi.volume_offset);
 			}
 
 			if (num_frames_mixed < p_frames) {
@@ -834,6 +834,7 @@ public:
 				++current_input_index;
 			}
 		}
+		end_volume_block(p_frames);
 		return true;
 	}
 };
@@ -882,18 +883,22 @@ public:
 	    }
 	    PROFILE_FUNCTION();
 
-	    float volume = get_volume();
-	    if (volume <= 0.0001f)
+	    begin_volume_block(p_frames);
+	    // Skip only when fully silent: both the target and the ramp start value
+	    // must be ~0, otherwise a fade-down still needs to be rendered.
+	    if (get_volume() <= 0.0001f && volume_at(0) <= 0.0001f)
 	    {
+	        end_volume_block(p_frames);
 	        return false;
 	    }
 	    float pitch = get_pitch();
 	    auto mixed_input = playback->mix_audio(pitch, p_frames);
 	    int num_frames_mixed = Math::min( p_frames, static_cast<int32_t>( mixed_input.size() ) );
 	    for (int i = 0; i < num_frames_mixed; i++) {
-	        p_buffer[i].left += mixed_input[i].x * volume;
-	        p_buffer[i].right += mixed_input[i].y * volume;
+	        p_buffer[i].left += mixed_input[i].x * volume_at(i);
+	        p_buffer[i].right += mixed_input[i].y * volume_at(i);
 	    }
+	    end_volume_block(p_frames);
         return num_frames_mixed == p_frames;
 	}
 };
@@ -1194,6 +1199,8 @@ public:
     std::vector<float> overlap_buffer;
     PackedFloat32Array smoothed_search_params;
     int last_selected_unit = -1;
+    int last_grain_output_center = -1;
+    int last_grain_half_window = -1;
     float selection_jitter_state = 0.0f;
     static constexpr int MAX_NO_REPEAT = 32;
     int no_repeat_count = 8;
@@ -1253,6 +1260,7 @@ public:
     }
 
     int select_new_grain(const PackedFloat32Array& params, float target_f0_hint, int current_index) {
+        PROFILE_FUNCTION();
         if (!db || db->get_grain_count() == 0) return -1;
 
         // Ask for more candidates than the no-repeat buffer so the
@@ -1286,6 +1294,9 @@ public:
             if (i == current_index + 1)
             {
                 score += 2000.0f;
+            }
+            if (rng.is_valid()) {
+                score += rng->randf_range(-shortlist_score_window * 2.0f, shortlist_score_window * 2.0f);
             }
             ranked_candidates.push_back({idx, score});
         }
@@ -1411,6 +1422,7 @@ public:
     }
 
     void trigger_unit() {
+        PROFILE_FUNCTION();
         if (!db) return;
         PackedFloat32Array params = get_smoothed_search_params();
         float target_f0_hint = get_target_f0();
@@ -1420,32 +1432,44 @@ public:
         const auto& entry = db->get_grain_entry(unit_index);
         if (entry.fundamental_hz <= 0.0f) return;
 
-        // Window must be sized to the rate that fired *this* trigger (smoothed_target_f0),
-        // not the selected grain's stored f0. The trigger spacing equals
-        // sample_rate / smoothed_target_f0, so half_window must equal that same
-        // period for the Hann overlap-add to sum to constant amplitude (COLA).
-        // This holds for both constant-rate databases and sweeps — the one-grain
-        // lag when f0 changes is inaudible because Hann edges are near zero.
         float window_f0 = (smoothed_target_f0 > 0.0f) ? smoothed_target_f0 : entry.fundamental_hz;
         int period_samples = std::max(1, static_cast<int>(std::round(db->get_sample_rate() / window_f0)));
-        int window_size = std::max(2, period_samples * 2);
-        int half_window = window_size / 2;
-        int input_start = entry.center_sample - half_window;
+        int half_window = std::max(1, period_samples);
+
+        // Asymmetric Hann window: ascending uses the previous grain's half-window
+        // size so that the two grains' window values sum to exactly 1 at every
+        // sample in the overlap region (COLA), even when f0 has changed and the
+        // two grains have different sizes.
+        int ascending_size = (last_grain_half_window > 0) ? last_grain_half_window : half_window;
+        int descending_size = half_window;
+        int total_window_size = ascending_size + descending_size;
+
+        int input_start = entry.center_sample - ascending_size;
         int pcm_size = db->pcm_sample_count();
-        // Place the grain center half_window samples ahead of the current
-        // read position so its ascending Hann half lands on unread samples
-        // and overlaps with the previous grain's descending half.
-        int output_center = static_cast<int>(std::round(overlap_read_index)) + half_window;
-        int output_start = output_center - half_window;
-        int output_jitter_samples = std::clamp(half_window / 20, 100, 200);
-        int jitter_samples = rng->randi_range(-output_jitter_samples, output_jitter_samples);
-        output_jitter_samples += jitter_samples;
-        int output_end = output_start + window_size;
+
+        // Place the grain so its ascending half starts at the previous grain's
+        // center (COLA ideal). Clamp to the current read cursor if that position
+        // was already consumed, to avoid writing to zeroed slots.
+        int output_start;
+        if (last_grain_output_center < 0) {
+            output_start = static_cast<int>(std::round(overlap_read_index));
+        } else {
+            output_start = std::max(last_grain_output_center,
+                                    static_cast<int>(std::round(overlap_read_index)));
+        }
+        // The peak of the asymmetric window (ascending→descending boundary) is
+        // the "center" tracked for the next grain's placement.
+        int output_center = output_start + ascending_size;
+        last_grain_output_center = output_center;
+        last_grain_half_window = descending_size;
+
+        int output_end = output_start + total_window_size;
 
         if (output_end <= 0) return;
         ensure_overlap_capacity(output_end);
 
-        for (int i = 0; i < window_size; ++i) {
+        for (int i = 0; i < total_window_size; ++i)
+        {
             int src_index = input_start + i;
             int dst_index = output_start + i;
             if (dst_index < 0 || dst_index >= static_cast<int>(overlap_buffer.size())) continue;
@@ -1455,8 +1479,14 @@ public:
                 sample = db->decode_sample(src_index);
             }
 
-            float phase = (window_size > 1) ? static_cast<float>(i) / static_cast<float>(window_size - 1) : 0.0f;
-            float window = 0.5f * (1.0f - std::cos(2.0f * Math_PI * phase));
+            float window;
+            if (i < ascending_size) {
+                float phase = static_cast<float>(i) / static_cast<float>(ascending_size);
+                window = 0.5f * (1.0f - std::cos(Math_PI * phase));
+            } else {
+                float phase = static_cast<float>(i - ascending_size) / static_cast<float>(descending_size);
+                window = 0.5f * (1.0f + std::cos(Math_PI * phase));
+            }
             overlap_buffer[dst_index] += sample * window;
         }
     }
@@ -1469,7 +1499,7 @@ public:
         PROFILE_FUNCTION();
         if (!db || db->get_grain_count() == 0) return false;
 
-        float vol = get_volume();
+        begin_volume_block(p_frames);
         ensure_overlap_capacity(p_frames + 2048);
 
         for (int frame_index = 0; frame_index < p_frames; ++frame_index) {
@@ -1497,11 +1527,12 @@ public:
                 overlap_buffer[read_index] = 0.0f;
             }
 
-            float out = sample * vol;
+            float out = sample * volume_at(frame_index);
             p_buffer[frame_index].left += out;
             p_buffer[frame_index].right += out;
             overlap_read_index += 1.0f;
         }
+        end_volume_block(p_frames);
 
         // Compact the overlap buffer so it stays bounded. Without this, both
         // overlap_read_index and overlap_buffer grow for the lifetime of the
@@ -1518,6 +1549,8 @@ public:
                 overlap_buffer.clear();
             }
             overlap_read_index -= static_cast<float>(read_pos);
+            if (last_grain_output_center >= 0)
+                last_grain_output_center -= read_pos;
         }
         return true;
     }

@@ -367,6 +367,35 @@ public:
 
     [[nodiscard]] float get_volume() const { return godot::UtilityFunctions::db_to_linear(base_volume_db) * (volume_multiplier ? volume_multiplier->get_value() : 1); }
     [[nodiscard]] float get_pitch() const { return base_pitch * (pitch_multiplier ? pitch_multiplier->get_value() : 1); }
+
+private:
+    // Per-sample volume ramp state, used to de-zipper volume changes. Reading
+    // get_volume() once per audio block and applying it as a constant inserts a
+    // step discontinuity into the signal whenever the value changes, which is
+    // audible as a click/crackle. Ramping the gain across the block instead
+    // keeps the gain curve continuous.
+    float volume_ramp_value = 0.0f;       // gain at start of current block
+    float volume_ramp_step = 0.0f;        // per-sample increment for current block
+    bool volume_ramp_initialized = false;
+
+public:
+    // Call once at the start of mix_output_into_buffer(), before the sample loop.
+    void begin_volume_block(int32_t p_frames) {
+        float target = get_volume();
+        if (!volume_ramp_initialized) {   // first block: snap, don't ramp from 0
+            volume_ramp_value = target;
+            volume_ramp_initialized = true;
+        }
+        volume_ramp_step = (target - volume_ramp_value) / float(p_frames > 0 ? p_frames : 1);
+    }
+    // Gain for sample `frame` within the block.
+    [[nodiscard]] float volume_at(int frame) const {
+        return volume_ramp_value + volume_ramp_step * float(frame);
+    }
+    // Call once after the sample loop to carry the end value into the next block.
+    void end_volume_block(int32_t p_frames) {
+        volume_ramp_value += volume_ramp_step * float(p_frames);
+    }
 };
 
 class StreamWeaverOutput : public godot::Resource {

@@ -42,7 +42,8 @@ using namespace godot;
 
 // -------------------- Helpers --------------------
 
-float StreamWeaverGrainsDatabase::lookup_curve(const PackedVector2Array& curve, float time_s) {
+float StreamWeaverGrainsDatabase::lookup_curve(const PackedVector2Array& curve, float time_s,
+                                               bool treat_zero_as_gap) {
     int n = curve.size();
     if (n == 0) return 0.f;
     if (time_s <= curve[0].x) return curve[0].y;
@@ -55,8 +56,9 @@ float StreamWeaverGrainsDatabase::lookup_curve(const PackedVector2Array& curve, 
     // Gap sentinels (y <= 0) mark frames where tracking dropped below the
     // stop threshold; treat the surrounding interval as untracked so the
     // grain extractor (which checks `f0 <= 0`) will skip these times rather
-    // than interpolate across the gap.
-    if (curve[lo].y <= 0.f || curve[hi].y <= 0.f) return -1.f;
+    // than interpolate across the gap. This only applies to the pitch
+    // tracking curve — parameter automation keyframes use 0 as a valid value.
+    if (treat_zero_as_gap && (curve[lo].y <= 0.f || curve[hi].y <= 0.f)) return -1.f;
     float t = (time_s - curve[lo].x) / (curve[hi].x - curve[lo].x);
     return curve[lo].y + t * (curve[hi].y - curve[lo].y);
 }
@@ -397,7 +399,7 @@ PackedInt32Array StreamWeaverGrainsDatabase::append_from_fft(
             continue;
         }
 
-        float f0 = lookup_curve(tracked_curve, time_s);
+        float f0 = lookup_curve(tracked_curve, time_s, /*treat_zero_as_gap=*/true);
         if (f0 <= 0) {
             cursor += 64;
             continue;
@@ -428,7 +430,7 @@ PackedInt32Array StreamWeaverGrainsDatabase::append_from_fft(
         }
         int local_center_sample = best_zc;
         float center_time = static_cast<float>(local_center_sample) / work_rate;
-        float center_f0 = lookup_curve(tracked_curve, center_time);
+        float center_f0 = lookup_curve(tracked_curve, center_time, /*treat_zero_as_gap=*/true);
         if (center_f0 <= 0.f) {
             cursor += period_samples;
             continue;
@@ -666,7 +668,7 @@ PackedInt32Array StreamWeaverGrainsDatabase::append_from_manual_markers(
         float t_end   = static_cast<float>(s_end)   / work_rate;
         float center_t      = (t_start + t_end) * 0.5f;
         float structural_f0 = 1.0f / (t_end - t_start); // period for windowing / energy
-        float tracked_f0    = lookup_curve(tracked_curve, center_t); // pitch at this time
+        float tracked_f0    = lookup_curve(tracked_curve, center_t, /*treat_zero_as_gap=*/true); // pitch at this time
         int   local_center  = static_cast<int>(std::round(center_t * work_rate));
         if (local_center < 0 || local_center >= total_samples) continue;
 
