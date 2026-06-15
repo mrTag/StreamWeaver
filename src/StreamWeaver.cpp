@@ -820,6 +820,12 @@ public:
 	    begin_volume_block(p_frames);
 		while (current_input_index < currently_playing_inputs.size()) {
 			auto& cpi = currently_playing_inputs[current_input_index];
+		    if (!cpi.playback.is_valid())
+		    {
+		        // this is a weird one, but sometimes the playback becomes invalid?
+		        currently_playing_inputs.remove_at(current_input_index);
+		        continue;
+		    }
 			auto mixed_input = cpi.playback->mix_audio(pitch + cpi.pitch_offset, p_frames);
 		    int num_frames_mixed = Math::min( p_frames, static_cast<int32_t>( mixed_input.size() ) );
 			for (int i = 0; i < num_frames_mixed; i++) {
