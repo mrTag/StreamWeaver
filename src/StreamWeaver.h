@@ -5,11 +5,25 @@
 #include "godot_cpp/classes/audio_stream_playback.hpp"
 #include "godot_cpp/templates/hash_map.hpp"
 #include "godot_cpp/templates/local_vector.hpp"
+#include "godot_cpp/templates/spin_lock.hpp"
 
 #include "GrainsDatabaseResource.h"
 
+#include <atomic>
+
 using chrono_clock = std::chrono::steady_clock;
 using fseconds = std::chrono::duration<float>;
+
+// Minimal RAII wrapper for godot::SpinLock. godot-cpp ships the lock but no
+// scoped guard, and the mix loops have several early-return paths where a manual
+// unlock() would be easy to miss.
+struct SpinLockGuard {
+    godot::SpinLock& lock;
+    explicit SpinLockGuard(godot::SpinLock& p_lock) : lock(p_lock) { lock.lock(); }
+    ~SpinLockGuard() { lock.unlock(); }
+    SpinLockGuard(const SpinLockGuard&) = delete;
+    SpinLockGuard& operator=(const SpinLockGuard&) = delete;
+};
 
 class StreamWeaverAudioStreamPlayback;
 
@@ -44,12 +58,16 @@ public:
 class StreamWeaverParameterRuntimeInstance
 {
 protected:
-    float current_value = 0;
+    // Written from the game thread (set_parameter) and read from the audio
+    // thread (get_value during _mix). Atomic to avoid a data race on the plain
+    // float; relaxed ordering is sufficient because it only needs to be a
+    // torn-free scalar, not ordered against any other state.
+    std::atomic<float> current_value{ 0.0f };
 public:
     virtual ~StreamWeaverParameterRuntimeInstance() = default;
-    virtual float get_value() { return current_value; }
+    virtual float get_value() { return current_value.load(std::memory_order_relaxed); }
 
-    void set_current_value(float value) { current_value = value; }
+    void set_current_value(float value) { current_value.store(value, std::memory_order_relaxed); }
 };
 
 class StreamWeaverParameter : public godot::Resource
@@ -360,6 +378,11 @@ public:
 	~StreamWeaverOutputRuntimeInstanceBase() override = default;
 	virtual bool mix_output_into_buffer(godot::AudioFrame *p_buffer, int32_t p_frames) =0;
 
+    // Points at the owning playback's mix_lock. Set in
+    // initialize_runtime_instance_base(). Used by the runtime instances whose
+    // mix pass reads state that the game thread's trigger() mutates.
+    godot::SpinLock* playback_lock = nullptr;
+
     float base_volume_db = 0;
     float base_pitch = 1;
     StreamWeaverParameterRuntimeInstance* volume_multiplier = nullptr;
@@ -599,9 +622,16 @@ class StreamWeaverAudioStreamPlayback : public godot::AudioStreamPlayback {
     godot::HashMap<godot::Ref<StreamWeaverParameter>, StreamWeaverParameterRuntimeInstance*> all_parameters;
     godot::HashMap<godot::Ref<StreamWeaverTrigger>, StreamWeaverTriggerRuntimeInstance*> all_triggers;
 	bool active = false;
+
+    // Serializes the game thread (trigger()) against the audio thread (_mix).
+    // The read-only structures built in initialize() are safe to touch unlocked;
+    // this only guards the mutable trigger/output state those two threads share.
+    godot::SpinLock mix_lock;
 public:
 	~StreamWeaverAudioStreamPlayback() override;
 	[[nodiscard]] const StreamWeaverAudioStream& GetParent() const { return *parent_stream.ptr(); }
+
+    godot::SpinLock* get_mix_lock() { return &mix_lock; }
 
     StreamWeaverParameterRuntimeInstance* get_parameter_runtime_instance(godot::Ref<StreamWeaverParameter> parameter);
     StreamWeaverTriggerRuntimeInstance* get_trigger_runtime_instance(godot::Ref<StreamWeaverTrigger> trigger);

@@ -305,7 +305,8 @@ public:
                 current_value = target_value;
             } else {
                 current_speed -= godot::Math::sign(current_speed) * speed_change;
-                current_value += current_speed * delta_time;
+                // atomic<float> has no operator+= in C++17; read-add-store instead.
+                current_value = current_value + current_speed * delta_time;
             }
         } else {
             // ACCELERATE or CONSTANT SPEED
@@ -315,7 +316,7 @@ public:
             if (godot::Math::abs(current_speed) > max_speed) {
                 current_speed = direction * max_speed;
             }
-            current_value += current_speed * delta_time;
+            current_value = current_value + current_speed * delta_time;
         }
         
         // Final safety check to prevent jittering around target
@@ -753,6 +754,7 @@ void StreamWeaverOutput::_bind_methods() {
 
 void StreamWeaverOutput::initialize_runtime_instance_base(StreamWeaverOutputRuntimeInstanceBase* runtime_instance, StreamWeaverAudioStreamPlayback* playback) {
 
+    runtime_instance->playback_lock = playback->get_mix_lock();
     runtime_instance->base_volume_db = base_volume_db;
     runtime_instance->base_pitch = base_pitch;
     if (volume_multiplier.is_valid())
@@ -811,6 +813,11 @@ public:
 	}
 
 	bool mix_output_into_buffer(AudioFrame *p_buffer, int32_t p_frames) override {
+		// currently_playing_inputs is mutated by trigger() on the game thread
+		// (and by metronome-driven triggers during the tick pass). Hold the
+		// playback lock for the whole traversal so push_back can't reallocate the
+		// vector — or free the element we're about to mix — mid-iteration.
+		SpinLockGuard guard(*playback_lock);
 		if (currently_playing_inputs.is_empty()) {
 			return false;
 		}
@@ -1733,6 +1740,11 @@ void StreamWeaverAudioStreamPlayback::set_parameter(StringName parameter_name, f
 }
 
 void StreamWeaverAudioStreamPlayback::trigger(StringName trigger) {
+	// Called from the game thread. Serialize the whole dispatch against the audio
+	// thread's tick/mix passes. The dispatch only does map lookups and small
+	// push_backs, so the audio thread never spins on this for long. The
+	// triggerables invoked here must NOT re-acquire mix_lock (it is non-recursive).
+	SpinLockGuard guard(mix_lock);
 	if ( auto trigger_runtime_instance = input_triggers.getptr( trigger )) {
 		(*trigger_runtime_instance)->trigger_all_triggerables();
 	}
@@ -1758,14 +1770,25 @@ int32_t StreamWeaverAudioStreamPlayback::_mix(AudioFrame *p_buffer, float p_rate
     auto now = chrono_clock::now();
     float delta = fseconds(now - last_tick_time).count();
     last_tick_time = now;
-    for (auto ticker : ticking_objects) {
-		ticker->tick(delta);
-	}
+    {
+        // The tick pass mutates and reads trigger/output state shared with the
+        // game thread's trigger()/set_parameter(); serialize it. Metronome ticks
+        // can fire whole trigger chains from in here, so the lock must span the
+        // entire pass. Kept separate from the output-mix pass below so the much
+        // heavier granular synthesis does not run under the lock.
+        SpinLockGuard guard(mix_lock);
+        for (auto ticker : ticking_objects) {
+            ticker->tick(delta);
+        }
+    }
 
 	for (int i = 0; i < p_frames; ++i) {
 		p_buffer[i].left = 0;
 		p_buffer[i].right = 0;
 	}
+	// The output-mix pass runs unlocked; each runtime instance that shares state
+	// with the game thread (currently only the randomize output) takes the lock
+	// itself for the narrow window it needs it.
 	for (auto runtime_output : runtime_outputs) {
 		runtime_output->mix_output_into_buffer(p_buffer, p_frames);
 	}
