@@ -1,8 +1,8 @@
 @tool
 extends EditorPlugin
 
-const MainPanel = preload("res://addons/streamweaver/graphnode/main_window.tscn")
-const GrainsDatabaseWindow = preload("res://addons/streamweaver/graphnode/grains_database_window.gd")
+const MainPanel = preload("res://addons/StreamWeaver/graphnode/main_window.tscn")
+const GrainsDatabaseWindow = preload("res://addons/StreamWeaver/graphnode/grains_database_window.gd")
 
 var main_panel_instance
 var grains_window_instance: Window

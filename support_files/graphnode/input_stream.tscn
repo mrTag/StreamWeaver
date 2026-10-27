@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://ohlifragumh2"]
 
-[ext_resource type="Script" uid="uid://csyh3vlul80sc" path="res://addons/streamweaver/graphnode/input_stream_graph_node.gd" id="1_gmj1p"]
+[ext_resource type="Script" uid="uid://csyh3vlul80sc" path="res://addons/StreamWeaver/graphnode/input_stream_graph_node.gd" id="1_gmj1p"]
 
 [node name="InputStream" type="GraphNode" unique_id=1900419180]
 offset_right = 250.0

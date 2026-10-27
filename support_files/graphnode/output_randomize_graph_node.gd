@@ -6,10 +6,9 @@ const LEFT_PORT_INPUT_STREAMS : int = 0
 const LEFT_PORT_TRIGGERS : int = 1
 const LEFT_PORT_VOLUME_MULT_PARAM : int = 2
 const LEFT_PORT_PITCH_MULT_PARAM : int = 3
+const RIGHT_PORT_STREAM_OUT : int = 0
 
-
-var current_resource: StreamWeaverOutputRandomize
-
+var current_resource: StreamWeaverStreamRandomize
 @onready var name_edit : LineEdit = %NameEdit
 @onready var base_volume : SpinBox = %BaseVolume
 @onready var base_pitch : SpinBox = %BasePitch
@@ -25,26 +24,38 @@ func _ready():
 	dragged.connect(_on_dragged)
 
 
-func initialize(res: StreamWeaverOutputRandomize):
+func initialize(res: StreamWeaverStreamRandomize):
 	current_resource = res
 	
 	_update_ui()
 
-static func create_new_resource(audio_stream_resource: StreamWeaverAudioStream) -> StreamWeaverOutputRandomize:
-	var res := StreamWeaverOutputRandomize.new()
-	res.output_name = "Output %d"%(audio_stream_resource.outputs.size() + 1)
+static func create_new_resource(audio_stream_resource: StreamWeaverAudioStream) -> StreamWeaverStreamRandomize:
+	var res := StreamWeaverStreamRandomize.new()
+	res.output_name = "Output %d"%(audio_stream_resource.streams.size() + 1)
 	res.resource_name = res.output_name
 	return res
 
 func add_to_stream_weaver_audio_stream(audio_stream_resource: Resource):
-	if audio_stream_resource and "outputs" in audio_stream_resource:
-		audio_stream_resource.outputs.append(current_resource)
+	if audio_stream_resource and "streams" in audio_stream_resource:
+		audio_stream_resource.streams.append(current_resource)
 		audio_stream_resource.emit_changed()
 
 func remove_from_stream_weaver_audio_stream(audio_stream_resource: Resource):
-	if audio_stream_resource and "outputs" in audio_stream_resource:
-		audio_stream_resource.outputs.erase(current_resource)
+	if audio_stream_resource and "streams" in audio_stream_resource:
+		audio_stream_resource.streams.erase(current_resource)
+		if "master_streams" in audio_stream_resource:
+			audio_stream_resource.master_streams.erase(current_resource)
 		audio_stream_resource.emit_changed()
+
+func get_resource_for_right_port(port: int) -> Resource:
+	if port == RIGHT_PORT_STREAM_OUT:
+		return current_resource
+	return null
+
+func get_right_port_for_resource(res: Resource) -> int:
+	if res == current_resource:
+		return RIGHT_PORT_STREAM_OUT
+	return -1
 
 # this is for the initialization of all connections
 # (one side should be enough and we choose left!)

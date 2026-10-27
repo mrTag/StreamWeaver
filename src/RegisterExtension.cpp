@@ -27,7 +27,15 @@ namespace
             return;
         }
 
+        godot::ClassDB::register_abstract_class<StreamWeaverStream>();
         godot::ClassDB::register_class<StreamWeaverInputStream>();
+        godot::ClassDB::register_class<StreamWeaverStreamMixer2Way>();
+
+        godot::ClassDB::register_abstract_class<StreamWeaverProducer>();
+        godot::ClassDB::register_class<StreamWeaverStreamRandomize>();
+        godot::ClassDB::register_class<StreamWeaverStreamLooping>();
+        godot::ClassDB::register_class<StreamWeaverStreamGranularLinearSweep>();
+        godot::ClassDB::register_class<StreamWeaverStreamGranularDatabase>();
 
         godot::ClassDB::register_abstract_class<StreamWeaverParameter>();
         godot::ClassDB::register_class<StreamWeaverParameterInput>();
@@ -43,13 +51,6 @@ namespace
         godot::ClassDB::register_class<StreamWeaverTriggerConditionalParameterRange>();
         godot::ClassDB::register_class<StreamWeaverTriggerDelay>();
         godot::ClassDB::register_class<StreamWeaverTriggerMetronome>();
-
-        godot::ClassDB::register_abstract_class<StreamWeaverOutput>();
-        godot::ClassDB::register_class<StreamWeaverOutputRandomize>();
-        godot::ClassDB::register_class<StreamWeaverOutputLooping>();
-        godot::ClassDB::register_class<StreamWeaverOutputGranularLinearSweep>();
-        godot::ClassDB::register_class<StreamWeaverOutputGranularDatabase>();
-
         godot::ClassDB::register_class<StreamWeaverAudioStream>();
         godot::ClassDB::register_class<StreamWeaverAudioStreamPlayback>();
 

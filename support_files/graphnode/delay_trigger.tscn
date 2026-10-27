@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://c6m8n0tr4p2qk"]
 
-[ext_resource type="Script" uid="uid://ddryin1xwwfse" path="res://addons/streamweaver/graphnode/delay_trigger_graph_node.gd" id="1_dlay"]
+[ext_resource type="Script" uid="uid://ddryin1xwwfse" path="res://addons/StreamWeaver/graphnode/delay_trigger_graph_node.gd" id="1_dlay"]
 
 [node name="DelayTrigger" type="GraphNode" unique_id=10627451]
 offset_right = 250.0

@@ -7,8 +7,9 @@ const LEFT_PORT_VOLUME_PARAMETER : int = 0
 const AXIS_PARAM_PORT_OFFSET : int = 1
 const AXIS_SLOT_COLOR := Color(0.81960785, 0.57254905, 0, 1)
 const AXIS_SLOT_TYPE : int = 1
+const RIGHT_PORT_STREAM_OUT : int = 0
 
-var current_resource: StreamWeaverOutputGranularDatabase
+var current_resource: StreamWeaverStreamGranularDatabase
 var _axis_labels: Array[Label] = []
 
 @onready var name_edit : LineEdit = %NameEdit
@@ -44,30 +45,43 @@ func _ready():
 	dragged.connect(_on_dragged)
 
 
-func initialize(res: StreamWeaverOutputGranularDatabase):
+func initialize(res: StreamWeaverStreamGranularDatabase):
 	current_resource = res
 	_rebuild_axis_slots()
 	_update_ui()
 
 
-static func create_new_resource(audio_stream_resource: StreamWeaverAudioStream) -> StreamWeaverOutputGranularDatabase:
-	var res := StreamWeaverOutputGranularDatabase.new()
-	res.output_name = "Output Granular Database %d" % (audio_stream_resource.outputs.size() + 1)
+static func create_new_resource(audio_stream_resource: StreamWeaverAudioStream) -> StreamWeaverStreamGranularDatabase:
+	var res := StreamWeaverStreamGranularDatabase.new()
+	res.output_name = "Output Granular Database %d" % (audio_stream_resource.streams.size() + 1)
 	res.resource_name = res.output_name
 	return res
 
 
 func add_to_stream_weaver_audio_stream(audio_stream_resource: Resource):
-	if audio_stream_resource and "outputs" in audio_stream_resource:
-		audio_stream_resource.outputs.append(current_resource)
+	if audio_stream_resource and "streams" in audio_stream_resource:
+		audio_stream_resource.streams.append(current_resource)
 		audio_stream_resource.emit_changed()
 
 
 func remove_from_stream_weaver_audio_stream(audio_stream_resource: Resource):
-	if audio_stream_resource and "outputs" in audio_stream_resource:
-		audio_stream_resource.outputs.erase(current_resource)
+	if audio_stream_resource and "streams" in audio_stream_resource:
+		audio_stream_resource.streams.erase(current_resource)
+		if "master_streams" in audio_stream_resource:
+			audio_stream_resource.master_streams.erase(current_resource)
 		audio_stream_resource.emit_changed()
 
+
+func get_resource_for_right_port(port: int) -> Resource:
+	if port == RIGHT_PORT_STREAM_OUT:
+		return current_resource
+	return null
+
+
+func get_right_port_for_resource(res: Resource) -> int:
+	if res == current_resource:
+		return RIGHT_PORT_STREAM_OUT
+	return -1
 
 func get_left_port_connections() -> Dictionary[int, Array]:
 	var connections : Dictionary[int, Array] = {}

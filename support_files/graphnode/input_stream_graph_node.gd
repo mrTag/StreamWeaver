@@ -20,20 +20,19 @@ func initialize(res: StreamWeaverInputStream):
 
 static func create_new_resource(audio_stream_resource: StreamWeaverAudioStream) -> StreamWeaverInputStream:
 	var res := StreamWeaverInputStream.new()
-	res.input_name = "Input %d"%(audio_stream_resource.inputs.size() + 1)
+	res.input_name = "Input %d"%(audio_stream_resource.streams.size() + 1)
 	res.resource_name = res.input_name
 	return res
 
 func add_to_stream_weaver_audio_stream(audio_stream_resource: StreamWeaverAudioStream):
-	if audio_stream_resource and "inputs" in audio_stream_resource:
-		audio_stream_resource.inputs.append(current_resource)
+	if audio_stream_resource and "streams" in audio_stream_resource:
+		audio_stream_resource.streams.append(current_resource)
 		audio_stream_resource.emit_changed()
 
 func remove_from_stream_weaver_audio_stream(audio_stream_resource: StreamWeaverAudioStream):
-	if audio_stream_resource and "inputs" in audio_stream_resource:
-		audio_stream_resource.inputs.erase(current_resource)
+	if audio_stream_resource and "streams" in audio_stream_resource:
+		audio_stream_resource.streams.erase(current_resource)
 		audio_stream_resource.emit_changed()
-
 func get_right_port_for_resource(res: Resource) -> int:
 	if res == current_resource:
 		return 0

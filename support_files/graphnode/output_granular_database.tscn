@@ -6,6 +6,15 @@
 offset_right = 260.0
 offset_bottom = 350.0
 title = "Output Granular Database"
+slot/0/left_enabled = false
+slot/0/left_type = 0
+slot/0/left_color = Color(1, 1, 1, 1)
+slot/0/left_icon = null
+slot/0/right_enabled = true
+slot/0/right_type = 0
+slot/0/right_color = Color(0.2901961, 0.6392157, 1, 1)
+slot/0/right_icon = null
+slot/0/draw_stylebox = true
 slot/8/left_enabled = true
 slot/8/left_type = 1
 slot/8/left_color = Color(0.81960785, 0.57254905, 0, 1)

@@ -15,13 +15,8 @@ void StreamWeaverInputStream::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_input_name", "input_name"), &StreamWeaverInputStream::SetInputName);
 	ClassDB::bind_method(D_METHOD("get_audio_stream"), &StreamWeaverInputStream::GetAudioStream);
 	ClassDB::bind_method(D_METHOD("set_audio_stream", "audio_stream"), &StreamWeaverInputStream::SetAudioStream);
-    ClassDB::bind_method(D_METHOD("get_graph_node_position"), &StreamWeaverInputStream::GetGraphNodePosition);
-    ClassDB::bind_method(D_METHOD("set_graph_node_position", "graph_node_position"), &StreamWeaverInputStream::SetGraphNodePosition);
-
-
 	ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "input_name"), "set_input_name", "get_input_name");
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "audio_stream", PROPERTY_HINT_RESOURCE_TYPE, "AudioStream"), "set_audio_stream", "get_audio_stream");
-    ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "graph_node_position"), "set_graph_node_position", "get_graph_node_position");
 }
 
 // -------------------- StreamWeaverParameter -------------------------
@@ -725,35 +720,41 @@ void StreamWeaverTriggerMetronome::release_runtime_instance(
     memdelete(dynamic_cast<StreamWeaverTriggerRuntimeInstanceMetronome*>(instance));
 }
 
-// -------------------- StreamWeaverOutput --------------------
-void StreamWeaverOutput::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("get_triggers"), &StreamWeaverOutput::GetTriggers);
-	ClassDB::bind_method(D_METHOD("set_triggers", "triggers"), &StreamWeaverOutput::SetTriggers);
-	ClassDB::bind_method(D_METHOD("get_output_name"), &StreamWeaverOutput::GetOutputName);
-	ClassDB::bind_method(D_METHOD("set_output_name", "output_name"), &StreamWeaverOutput::SetOutputName);
-    ClassDB::bind_method(D_METHOD("get_base_volume_db"), &StreamWeaverOutput::GetBaseVolumeDb);
-    ClassDB::bind_method(D_METHOD("set_base_volume_db", "base_volume_db"), &StreamWeaverOutput::SetBaseVolumeDb);
-    ClassDB::bind_method(D_METHOD("get_base_pitch"), &StreamWeaverOutput::GetBasePitch);
-    ClassDB::bind_method(D_METHOD("set_base_pitch", "base_pitch"), &StreamWeaverOutput::SetBasePitch);
-    ClassDB::bind_method(D_METHOD("get_graph_node_position"), &StreamWeaverOutput::GetGraphNodePosition);
-    ClassDB::bind_method(D_METHOD("set_graph_node_position", "graph_node_position"), &StreamWeaverOutput::SetGraphNodePosition);
-    ClassDB::bind_method(D_METHOD("get_volume_multiplier"), &StreamWeaverOutput::GetVolumeMultiplier);
-    ClassDB::bind_method(D_METHOD("set_volume_multiplier", "volume_multiplier"), &StreamWeaverOutput::SetVolumeMultiplier);
-    ClassDB::bind_method(D_METHOD("get_pitch_multiplier"), &StreamWeaverOutput::GetPitchMultiplier);
-    ClassDB::bind_method(D_METHOD("set_pitch_multiplier", "pitch_multiplier"), &StreamWeaverOutput::SetPitchMultiplier);
+// -------------------- StreamWeaverStream --------------------
+void StreamWeaverStream::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("get_graph_node_position"), &StreamWeaverStream::GetGraphNodePosition);
+	ClassDB::bind_method(D_METHOD("set_graph_node_position", "graph_node_position"), &StreamWeaverStream::SetGraphNodePosition);
+	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "graph_node_position"), "set_graph_node_position", "get_graph_node_position");
+}
 
-	
+// -------------------- StreamWeaverProducer --------------------
+void StreamWeaverProducer::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("get_triggers"), &StreamWeaverProducer::GetTriggers);
+	ClassDB::bind_method(D_METHOD("set_triggers", "triggers"), &StreamWeaverProducer::SetTriggers);
+	ClassDB::bind_method(D_METHOD("get_output_name"), &StreamWeaverProducer::GetOutputName);
+	ClassDB::bind_method(D_METHOD("set_output_name", "output_name"), &StreamWeaverProducer::SetOutputName);
+    ClassDB::bind_method(D_METHOD("get_base_volume_db"), &StreamWeaverProducer::GetBaseVolumeDb);
+    ClassDB::bind_method(D_METHOD("set_base_volume_db", "base_volume_db"), &StreamWeaverProducer::SetBaseVolumeDb);
+    ClassDB::bind_method(D_METHOD("get_base_pitch"), &StreamWeaverProducer::GetBasePitch);
+    ClassDB::bind_method(D_METHOD("set_base_pitch", "base_pitch"), &StreamWeaverProducer::SetBasePitch);
+    ClassDB::bind_method(D_METHOD("get_volume_multiplier"), &StreamWeaverProducer::GetVolumeMultiplier);
+    ClassDB::bind_method(D_METHOD("set_volume_multiplier", "volume_multiplier"), &StreamWeaverProducer::SetVolumeMultiplier);
+    ClassDB::bind_method(D_METHOD("get_pitch_multiplier"), &StreamWeaverProducer::GetPitchMultiplier);
+    ClassDB::bind_method(D_METHOD("set_pitch_multiplier", "pitch_multiplier"), &StreamWeaverProducer::SetPitchMultiplier);
+
 	ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "output_name"), "set_output_name", "get_output_name");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "triggers", PROPERTY_HINT_ARRAY_TYPE, "StreamWeaverTrigger"), "set_triggers", "get_triggers");
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "base_volume_db"), "set_base_volume_db", "get_base_volume_db");
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "base_pitch"), "set_base_pitch", "get_base_pitch");
     ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "volume_multiplier", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverParameter"), "set_volume_multiplier", "get_volume_multiplier");
     ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "pitch_multiplier", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverParameter"), "set_pitch_multiplier", "get_pitch_multiplier");
-	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "graph_node_position"), "set_graph_node_position", "get_graph_node_position");
 }
 
-void StreamWeaverOutput::initialize_runtime_instance_base(StreamWeaverOutputRuntimeInstanceBase* runtime_instance, StreamWeaverAudioStreamPlayback* playback) {
+void StreamWeaverProducer::release_runtime_instance(StreamWeaverStreamRuntimeInstance* instance) {
+    memdelete(instance);
+}
 
+void StreamWeaverProducer::initialize_runtime_instance_base(StreamWeaverProducerRuntimeInstanceBase* runtime_instance, StreamWeaverAudioStreamPlayback* playback) {
     runtime_instance->playback_lock = playback->get_mix_lock();
     runtime_instance->base_volume_db = base_volume_db;
     runtime_instance->base_pitch = base_pitch;
@@ -767,21 +768,20 @@ void StreamWeaverOutput::initialize_runtime_instance_base(StreamWeaverOutputRunt
     }
 }
 
-// -------------------- StreamWeaverOutputRandomize --------------------
-void StreamWeaverOutputRandomize::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("get_randomize_pitch"), &StreamWeaverOutputRandomize::GetRandomizePitchOffset);
-	ClassDB::bind_method(D_METHOD("set_randomize_pitch", "randomize_pitch"), &StreamWeaverOutputRandomize::SetRandomizePitchOffset);
-	ClassDB::bind_method(D_METHOD("get_randomize_volume"), &StreamWeaverOutputRandomize::GetRandomizeVolumeOffset);
-	ClassDB::bind_method(D_METHOD("set_randomize_volume", "randomize_volume"), &StreamWeaverOutputRandomize::SetRandomizeVolumeOffset);
-	ClassDB::bind_method(D_METHOD("get_input_streams"), &StreamWeaverOutputRandomize::GetInputStreams);
-	ClassDB::bind_method(D_METHOD("set_input_streams", "input_streams"), &StreamWeaverOutputRandomize::SetInputStreams);
+// -------------------- StreamWeaverStreamRandomize --------------------
+void StreamWeaverStreamRandomize::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("get_randomize_pitch"), &StreamWeaverStreamRandomize::GetRandomizePitchOffset);
+	ClassDB::bind_method(D_METHOD("set_randomize_pitch", "randomize_pitch"), &StreamWeaverStreamRandomize::SetRandomizePitchOffset);
+	ClassDB::bind_method(D_METHOD("get_randomize_volume"), &StreamWeaverStreamRandomize::GetRandomizeVolumeOffset);
+	ClassDB::bind_method(D_METHOD("set_randomize_volume", "randomize_volume"), &StreamWeaverStreamRandomize::SetRandomizeVolumeOffset);
+	ClassDB::bind_method(D_METHOD("get_input_streams"), &StreamWeaverStreamRandomize::GetInputStreams);
+	ClassDB::bind_method(D_METHOD("set_input_streams", "input_streams"), &StreamWeaverStreamRandomize::SetInputStreams);
 
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "randomize_pitch"), "set_randomize_pitch", "get_randomize_pitch");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "randomize_volume"), "set_randomize_volume", "get_randomize_volume");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "input_streams", PROPERTY_HINT_ARRAY_TYPE, "StreamWeaverInputStream"), "set_input_streams", "get_input_streams");
 }
-
-class ParameterizedOutputRandomizeRuntimeInstance : public StreamWeaverOutputRuntimeInstanceBase {
+class ParameterizedOutputRandomizeRuntimeInstance : public StreamWeaverProducerRuntimeInstanceBase {
 public:
 	float randomize_pitch = 1;
 	float randomize_volume = 0;
@@ -852,7 +852,7 @@ public:
 	}
 };
 
-StreamWeaverOutputRuntimeInstanceBase *StreamWeaverOutputRandomize::create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) {
+StreamWeaverProducerRuntimeInstanceBase *StreamWeaverStreamRandomize::create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) {
 	PROFILE_FUNCTION();
 	auto* instance = memnew(ParameterizedOutputRandomizeRuntimeInstance);
     initialize_runtime_instance_base( instance, from_playback );
@@ -868,20 +868,16 @@ StreamWeaverOutputRuntimeInstanceBase *StreamWeaverOutputRandomize::create_runti
 	return instance;
 }
 
-void StreamWeaverOutputRandomize::release_runtime_instance(StreamWeaverOutputRuntimeInstanceBase *instance) {
-	memdelete(dynamic_cast<ParameterizedOutputRandomizeRuntimeInstance*>(instance));
+// -------------------- StreamWeaverStreamLooping --------------------
+
+void StreamWeaverStreamLooping::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("get_input_stream"), &StreamWeaverStreamLooping::GetInputStream);
+	ClassDB::bind_method(D_METHOD("set_input_stream", "input_stream"), &StreamWeaverStreamLooping::SetInputStream);
+
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "input_stream", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverInputStream"), "set_input_stream", "get_input_stream");
 }
 
-// -------------------- StreamWeaverOutputLooping --------------------
-
-void StreamWeaverOutputLooping::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("get_input_stream"), &StreamWeaverOutputLooping::GetInputStream);
-	ClassDB::bind_method(D_METHOD("set_input_stream", "input_stream"), &StreamWeaverOutputLooping::SetInputStream);
-
-	ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "input_stream"), "set_input_stream", "get_input_stream");
-}
-
-class ParameterizedOutputLoopingRuntimeInstance : public StreamWeaverOutputRuntimeInstanceBase {
+class ParameterizedOutputLoopingRuntimeInstance : public StreamWeaverProducerRuntimeInstanceBase {
 public:
     Ref<AudioStreamPlayback> playback;
 
@@ -916,7 +912,7 @@ public:
 	}
 };
 
-StreamWeaverOutputRuntimeInstanceBase *StreamWeaverOutputLooping::create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) {
+StreamWeaverProducerRuntimeInstanceBase *StreamWeaverStreamLooping::create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) {
 	auto* instance = memnew(ParameterizedOutputLoopingRuntimeInstance);
     initialize_runtime_instance_base( instance, from_playback );
     instance->playback = input_stream->GetAudioStream()->instantiate_playback();
@@ -927,30 +923,25 @@ StreamWeaverOutputRuntimeInstanceBase *StreamWeaverOutputLooping::create_runtime
 	return instance;
 }
 
-void StreamWeaverOutputLooping::release_runtime_instance(StreamWeaverOutputRuntimeInstanceBase *instance) {
-	memdelete(dynamic_cast<ParameterizedOutputLoopingRuntimeInstance *>(instance));
-}
-
-
-// -------------------- StreamWeaverOutputGranularLinearSweep ------
-void StreamWeaverOutputGranularLinearSweep::_bind_methods()
+// -------------------- StreamWeaverStreamGranularLinearSweep ------
+void StreamWeaverStreamGranularLinearSweep::_bind_methods()
 {
-    ClassDB::bind_method(D_METHOD("get_input_stream"), &StreamWeaverOutputGranularLinearSweep::GetInputStream);
-    ClassDB::bind_method(D_METHOD("set_input_stream", "inputStream"), &StreamWeaverOutputGranularLinearSweep::SetInputStream);
-    ClassDB::bind_method(D_METHOD("get_sweeping_parameter"), &StreamWeaverOutputGranularLinearSweep::GetSweepingParameter);
-    ClassDB::bind_method(D_METHOD("set_sweeping_parameter", "sweepingParameter"), &StreamWeaverOutputGranularLinearSweep::SetSweepingParameter);
-    ClassDB::bind_method(D_METHOD("get_min_parameter_value"), &StreamWeaverOutputGranularLinearSweep::GetMinParameterValue);
-    ClassDB::bind_method(D_METHOD("set_min_parameter_value", "minParameterValue"), &StreamWeaverOutputGranularLinearSweep::SetMinParameterValue);
-    ClassDB::bind_method(D_METHOD("get_max_parameter_value"), &StreamWeaverOutputGranularLinearSweep::GetMaxParameterValue);
-    ClassDB::bind_method(D_METHOD("set_max_parameter_value", "maxParameterValue"), &StreamWeaverOutputGranularLinearSweep::SetMaxParameterValue);
-    ClassDB::bind_method(D_METHOD("get_min_grain_size_milliseconds"), &StreamWeaverOutputGranularLinearSweep::GetMinGrainSizeMilliseconds);
-    ClassDB::bind_method(D_METHOD("set_min_grain_size_milliseconds", "grainSizeMs"), &StreamWeaverOutputGranularLinearSweep::SetMinGrainSizeMilliseconds);
-    ClassDB::bind_method(D_METHOD("get_max_grain_size_milliseconds"), &StreamWeaverOutputGranularLinearSweep::GetMaxGrainSizeMilliseconds);
-    ClassDB::bind_method(D_METHOD("set_max_grain_size_milliseconds", "maxGrainSizeMs"), &StreamWeaverOutputGranularLinearSweep::SetMaxGrainSizeMilliseconds);
-    ClassDB::bind_method(D_METHOD("get_grain_jitter_percentage"), &StreamWeaverOutputGranularLinearSweep::GetGrainJitterPercentage);
-    ClassDB::bind_method(D_METHOD("set_grain_jitter_percentage", "grainJitterPercentage"), &StreamWeaverOutputGranularLinearSweep::SetGrainJitterPercentage);
+    ClassDB::bind_method(D_METHOD("get_input_stream"), &StreamWeaverStreamGranularLinearSweep::GetInputStream);
+    ClassDB::bind_method(D_METHOD("set_input_stream", "inputStream"), &StreamWeaverStreamGranularLinearSweep::SetInputStream);
+    ClassDB::bind_method(D_METHOD("get_sweeping_parameter"), &StreamWeaverStreamGranularLinearSweep::GetSweepingParameter);
+    ClassDB::bind_method(D_METHOD("set_sweeping_parameter", "sweepingParameter"), &StreamWeaverStreamGranularLinearSweep::SetSweepingParameter);
+    ClassDB::bind_method(D_METHOD("get_min_parameter_value"), &StreamWeaverStreamGranularLinearSweep::GetMinParameterValue);
+    ClassDB::bind_method(D_METHOD("set_min_parameter_value", "minParameterValue"), &StreamWeaverStreamGranularLinearSweep::SetMinParameterValue);
+    ClassDB::bind_method(D_METHOD("get_max_parameter_value"), &StreamWeaverStreamGranularLinearSweep::GetMaxParameterValue);
+    ClassDB::bind_method(D_METHOD("set_max_parameter_value", "maxParameterValue"), &StreamWeaverStreamGranularLinearSweep::SetMaxParameterValue);
+    ClassDB::bind_method(D_METHOD("get_min_grain_size_milliseconds"), &StreamWeaverStreamGranularLinearSweep::GetMinGrainSizeMilliseconds);
+    ClassDB::bind_method(D_METHOD("set_min_grain_size_milliseconds", "grainSizeMs"), &StreamWeaverStreamGranularLinearSweep::SetMinGrainSizeMilliseconds);
+    ClassDB::bind_method(D_METHOD("get_max_grain_size_milliseconds"), &StreamWeaverStreamGranularLinearSweep::GetMaxGrainSizeMilliseconds);
+    ClassDB::bind_method(D_METHOD("set_max_grain_size_milliseconds", "maxGrainSizeMs"), &StreamWeaverStreamGranularLinearSweep::SetMaxGrainSizeMilliseconds);
+    ClassDB::bind_method(D_METHOD("get_grain_jitter_percentage"), &StreamWeaverStreamGranularLinearSweep::GetGrainJitterPercentage);
+    ClassDB::bind_method(D_METHOD("set_grain_jitter_percentage", "grainJitterPercentage"), &StreamWeaverStreamGranularLinearSweep::SetGrainJitterPercentage);
 
-    ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "input_stream"), "set_input_stream", "get_input_stream");
+    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "input_stream", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverInputStream"), "set_input_stream", "get_input_stream");
     ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "sweeping_parameter", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverParameter"), "set_sweeping_parameter", "get_sweeping_parameter");
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "min_parameter_value"), "set_min_parameter_value", "get_min_parameter_value");
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "max_parameter_value"), "set_max_parameter_value", "get_max_parameter_value");
@@ -959,7 +950,7 @@ void StreamWeaverOutputGranularLinearSweep::_bind_methods()
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "grain_jitter_percentage"), "set_grain_jitter_percentage", "get_grain_jitter_percentage");
 }
 
-class StreamWeaverOutputGranularLinearSweepRuntime : public StreamWeaverOutputRuntimeInstanceBase
+class StreamWeaverOutputGranularLinearSweepRuntime : public StreamWeaverProducerRuntimeInstanceBase
 {
 public:
     float min_parameter_value;
@@ -1097,9 +1088,9 @@ public:
 	}
 };
 
-StreamWeaverOutputRuntimeInstanceBase* StreamWeaverOutputGranularLinearSweep::create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) {
+StreamWeaverProducerRuntimeInstanceBase* StreamWeaverStreamGranularLinearSweep::create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) {
     PROFILE_FUNCTION();
-    auto* instance = new StreamWeaverOutputGranularLinearSweepRuntime();
+    auto* instance = memnew(StreamWeaverOutputGranularLinearSweepRuntime);
     initialize_runtime_instance_base( instance, from_playback );
     instance->sweeping_parameter = from_playback->get_parameter_runtime_instance(sweeping_parameter);
     auto playback = input_stream->GetAudioStream()->instantiate_playback();
@@ -1124,75 +1115,70 @@ StreamWeaverOutputRuntimeInstanceBase* StreamWeaverOutputGranularLinearSweep::cr
     return instance;
 }
 
-void StreamWeaverOutputGranularLinearSweep::release_runtime_instance(StreamWeaverOutputRuntimeInstanceBase *instance) {
-	memdelete(dynamic_cast<StreamWeaverOutputGranularLinearSweepRuntime*>(instance));
-}
+// -------------------- StreamWeaverStreamGranularDatabase --------------------
 
-// -------------------- StreamWeaverOutputGranularDatabase --------------------
-
-void StreamWeaverOutputGranularDatabase::_bind_methods() {
-    ClassDB::bind_method(D_METHOD("get_grains_database"), &StreamWeaverOutputGranularDatabase::GetGrainsDatabase);
-    ClassDB::bind_method(D_METHOD("set_grains_database", "database"), &StreamWeaverOutputGranularDatabase::SetGrainsDatabase);
+void StreamWeaverStreamGranularDatabase::_bind_methods() {
+    ClassDB::bind_method(D_METHOD("get_grains_database"), &StreamWeaverStreamGranularDatabase::GetGrainsDatabase);
+    ClassDB::bind_method(D_METHOD("set_grains_database", "database"), &StreamWeaverStreamGranularDatabase::SetGrainsDatabase);
     ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "grains_database", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverGrainsDatabase"),
         "set_grains_database", "get_grains_database");
 
-    ClassDB::bind_method(D_METHOD("get_axis_parameters"), &StreamWeaverOutputGranularDatabase::GetAxisParameters);
-    ClassDB::bind_method(D_METHOD("set_axis_parameters", "params"), &StreamWeaverOutputGranularDatabase::SetAxisParameters);
+    ClassDB::bind_method(D_METHOD("get_axis_parameters"), &StreamWeaverStreamGranularDatabase::GetAxisParameters);
+    ClassDB::bind_method(D_METHOD("set_axis_parameters", "params"), &StreamWeaverStreamGranularDatabase::SetAxisParameters);
     ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "axis_parameters", PROPERTY_HINT_ARRAY_TYPE, "StreamWeaverParameter"),
         "set_axis_parameters", "get_axis_parameters");
 
-    ClassDB::bind_method(D_METHOD("get_pitch_correction_enabled"), &StreamWeaverOutputGranularDatabase::GetPitchCorrectionEnabled);
-    ClassDB::bind_method(D_METHOD("set_pitch_correction_enabled", "enabled"), &StreamWeaverOutputGranularDatabase::SetPitchCorrectionEnabled);
+    ClassDB::bind_method(D_METHOD("get_pitch_correction_enabled"), &StreamWeaverStreamGranularDatabase::GetPitchCorrectionEnabled);
+    ClassDB::bind_method(D_METHOD("set_pitch_correction_enabled", "enabled"), &StreamWeaverStreamGranularDatabase::SetPitchCorrectionEnabled);
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "pitch_correction_enabled"),
         "set_pitch_correction_enabled", "get_pitch_correction_enabled");
 
-    ClassDB::bind_method(D_METHOD("get_no_repeat_count"), &StreamWeaverOutputGranularDatabase::GetNoRepeatCount);
-    ClassDB::bind_method(D_METHOD("set_no_repeat_count", "count"), &StreamWeaverOutputGranularDatabase::SetNoRepeatCount);
+    ClassDB::bind_method(D_METHOD("get_no_repeat_count"), &StreamWeaverStreamGranularDatabase::GetNoRepeatCount);
+    ClassDB::bind_method(D_METHOD("set_no_repeat_count", "count"), &StreamWeaverStreamGranularDatabase::SetNoRepeatCount);
     ADD_PROPERTY(PropertyInfo(Variant::INT, "no_repeat_count", PROPERTY_HINT_RANGE, "1,32,1"),
         "set_no_repeat_count", "get_no_repeat_count");
 
-    ClassDB::bind_method(D_METHOD("get_candidate_pool_size"), &StreamWeaverOutputGranularDatabase::GetCandidatePoolSize);
-    ClassDB::bind_method(D_METHOD("set_candidate_pool_size", "size"), &StreamWeaverOutputGranularDatabase::SetCandidatePoolSize);
+    ClassDB::bind_method(D_METHOD("get_candidate_pool_size"), &StreamWeaverStreamGranularDatabase::GetCandidatePoolSize);
+    ClassDB::bind_method(D_METHOD("set_candidate_pool_size", "size"), &StreamWeaverStreamGranularDatabase::SetCandidatePoolSize);
     ADD_PROPERTY(PropertyInfo(Variant::INT, "candidate_pool_size", PROPERTY_HINT_RANGE, "4,128,1"),
         "set_candidate_pool_size", "get_candidate_pool_size");
 
-    ClassDB::bind_method(D_METHOD("get_search_param_smoothing"), &StreamWeaverOutputGranularDatabase::GetSearchParamSmoothing);
-    ClassDB::bind_method(D_METHOD("set_search_param_smoothing", "smoothing"), &StreamWeaverOutputGranularDatabase::SetSearchParamSmoothing);
+    ClassDB::bind_method(D_METHOD("get_search_param_smoothing"), &StreamWeaverStreamGranularDatabase::GetSearchParamSmoothing);
+    ClassDB::bind_method(D_METHOD("set_search_param_smoothing", "smoothing"), &StreamWeaverStreamGranularDatabase::SetSearchParamSmoothing);
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "search_param_smoothing", PROPERTY_HINT_RANGE, "0,1,0.01"),
         "set_search_param_smoothing", "get_search_param_smoothing");
 
-    ClassDB::bind_method(D_METHOD("get_shortlist_score_window"), &StreamWeaverOutputGranularDatabase::GetShortlistScoreWindow);
-    ClassDB::bind_method(D_METHOD("set_shortlist_score_window", "window"), &StreamWeaverOutputGranularDatabase::SetShortlistScoreWindow);
+    ClassDB::bind_method(D_METHOD("get_shortlist_score_window"), &StreamWeaverStreamGranularDatabase::GetShortlistScoreWindow);
+    ClassDB::bind_method(D_METHOD("set_shortlist_score_window", "window"), &StreamWeaverStreamGranularDatabase::SetShortlistScoreWindow);
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "shortlist_score_window", PROPERTY_HINT_RANGE, "0,12,0.05"),
         "set_shortlist_score_window", "get_shortlist_score_window");
 
-    ClassDB::bind_method(D_METHOD("get_continuity_bias"), &StreamWeaverOutputGranularDatabase::GetContinuityBias);
-    ClassDB::bind_method(D_METHOD("set_continuity_bias", "bias"), &StreamWeaverOutputGranularDatabase::SetContinuityBias);
+    ClassDB::bind_method(D_METHOD("get_continuity_bias"), &StreamWeaverStreamGranularDatabase::GetContinuityBias);
+    ClassDB::bind_method(D_METHOD("set_continuity_bias", "bias"), &StreamWeaverStreamGranularDatabase::SetContinuityBias);
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "continuity_bias", PROPERTY_HINT_RANGE, "0,4,0.01"),
         "set_continuity_bias", "get_continuity_bias");
 
-    ClassDB::bind_method(D_METHOD("get_random_selection_span"), &StreamWeaverOutputGranularDatabase::GetRandomSelectionSpan);
-    ClassDB::bind_method(D_METHOD("set_random_selection_span", "span"), &StreamWeaverOutputGranularDatabase::SetRandomSelectionSpan);
+    ClassDB::bind_method(D_METHOD("get_random_selection_span"), &StreamWeaverStreamGranularDatabase::GetRandomSelectionSpan);
+    ClassDB::bind_method(D_METHOD("set_random_selection_span", "span"), &StreamWeaverStreamGranularDatabase::SetRandomSelectionSpan);
     ADD_PROPERTY(PropertyInfo(Variant::INT, "random_selection_span", PROPERTY_HINT_RANGE, "0,32,1"),
         "set_random_selection_span", "get_random_selection_span");
 
-    ClassDB::bind_method(D_METHOD("get_random_walk_step"), &StreamWeaverOutputGranularDatabase::GetRandomWalkStep);
-    ClassDB::bind_method(D_METHOD("set_random_walk_step", "step"), &StreamWeaverOutputGranularDatabase::SetRandomWalkStep);
+    ClassDB::bind_method(D_METHOD("get_random_walk_step"), &StreamWeaverStreamGranularDatabase::GetRandomWalkStep);
+    ClassDB::bind_method(D_METHOD("set_random_walk_step", "step"), &StreamWeaverStreamGranularDatabase::SetRandomWalkStep);
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "random_walk_step", PROPERTY_HINT_RANGE, "0,8,0.05"),
         "set_random_walk_step", "get_random_walk_step");
 
-    ClassDB::bind_method(D_METHOD("get_random_walk_damping"), &StreamWeaverOutputGranularDatabase::GetRandomWalkDamping);
-    ClassDB::bind_method(D_METHOD("set_random_walk_damping", "damping"), &StreamWeaverOutputGranularDatabase::SetRandomWalkDamping);
+    ClassDB::bind_method(D_METHOD("get_random_walk_damping"), &StreamWeaverStreamGranularDatabase::GetRandomWalkDamping);
+    ClassDB::bind_method(D_METHOD("set_random_walk_damping", "damping"), &StreamWeaverStreamGranularDatabase::SetRandomWalkDamping);
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "random_walk_damping", PROPERTY_HINT_RANGE, "0,1,0.01"),
         "set_random_walk_damping", "get_random_walk_damping");
-
-    ClassDB::bind_method(D_METHOD("get_preferred_match_bias"), &StreamWeaverOutputGranularDatabase::GetPreferredMatchBias);
-    ClassDB::bind_method(D_METHOD("set_preferred_match_bias", "bias"), &StreamWeaverOutputGranularDatabase::SetPreferredMatchBias);
+    ClassDB::bind_method(D_METHOD("get_preferred_match_bias"), &StreamWeaverStreamGranularDatabase::GetPreferredMatchBias);
+    ClassDB::bind_method(D_METHOD("set_preferred_match_bias", "bias"), &StreamWeaverStreamGranularDatabase::SetPreferredMatchBias);
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "preferred_match_bias", PROPERTY_HINT_RANGE, "0,4,0.01"),
         "set_preferred_match_bias", "get_preferred_match_bias");
 }
 
-class StreamWeaverOutputGranularDatabaseRuntime : public StreamWeaverOutputRuntimeInstanceBase {
+class StreamWeaverOutputGranularDatabaseRuntime : public StreamWeaverProducerRuntimeInstanceBase {
 public:
     struct RankedCandidate {
         int idx = -1;
@@ -1578,11 +1564,11 @@ public:
     }
 };
 
-StreamWeaverOutputRuntimeInstanceBase* StreamWeaverOutputGranularDatabase::create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) {
+StreamWeaverProducerRuntimeInstanceBase* StreamWeaverStreamGranularDatabase::create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) {
     PROFILE_FUNCTION();
     if (grains_database.is_null() || grains_database->get_grain_count() == 0) return nullptr;
 
-    auto* instance = new StreamWeaverOutputGranularDatabaseRuntime();
+    auto* instance = memnew(StreamWeaverOutputGranularDatabaseRuntime);
     initialize_runtime_instance_base(instance, from_playback);
     instance->db = grains_database.ptr();
     instance->pitch_correction_enabled = pitch_correction_enabled;
@@ -1596,9 +1582,6 @@ StreamWeaverOutputRuntimeInstanceBase* StreamWeaverOutputGranularDatabase::creat
     instance->random_walk_damping = Math::clamp(random_walk_damping, 0.0f, 1.0f);
     instance->preferred_match_bias = std::max(0.0f, preferred_match_bias);
 
-    // Set up axis parameter runtime instances. Keep them aligned to the
-    // database's axis indices so a missing wiring does not shift other
-    // axes' values into the wrong slot.
     int num_axes = grains_database->get_num_axes();
     instance->axis_param_instances.resize(num_axes);
     for (int i = 0; i < num_axes; ++i) {
@@ -1617,7 +1600,6 @@ StreamWeaverOutputRuntimeInstanceBase* StreamWeaverOutputGranularDatabase::creat
     instance->rng.instantiate();
     instance->rng->set_seed(random_seed);
 
-    // Initialize anti-repeat state and overlap buffer for PSOLA synthesis.
     for (int i = 0; i < StreamWeaverOutputGranularDatabaseRuntime::MAX_NO_REPEAT; ++i) {
         instance->last_played[i] = -1;
     }
@@ -1627,8 +1609,103 @@ StreamWeaverOutputRuntimeInstanceBase* StreamWeaverOutputGranularDatabase::creat
     return instance;
 }
 
-void StreamWeaverOutputGranularDatabase::release_runtime_instance(StreamWeaverOutputRuntimeInstanceBase* instance) {
-    memdelete(dynamic_cast<StreamWeaverOutputGranularDatabaseRuntime*>(instance));
+// -------------------- StreamWeaverStreamMixer2Way --------------------
+void StreamWeaverStreamMixer2Way::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("get_input_stream_a"), &StreamWeaverStreamMixer2Way::GetInputStreamA);
+	ClassDB::bind_method(D_METHOD("set_input_stream_a", "stream"), &StreamWeaverStreamMixer2Way::SetInputStreamA);
+	ClassDB::bind_method(D_METHOD("get_input_stream_b"), &StreamWeaverStreamMixer2Way::GetInputStreamB);
+	ClassDB::bind_method(D_METHOD("set_input_stream_b", "stream"), &StreamWeaverStreamMixer2Way::SetInputStreamB);
+	ClassDB::bind_method(D_METHOD("get_mix_parameter"), &StreamWeaverStreamMixer2Way::GetMixParameter);
+	ClassDB::bind_method(D_METHOD("set_mix_parameter", "param"), &StreamWeaverStreamMixer2Way::SetMixParameter);
+	ClassDB::bind_method(D_METHOD("get_mix_value"), &StreamWeaverStreamMixer2Way::GetMixValue);
+	ClassDB::bind_method(D_METHOD("set_mix_value", "value"), &StreamWeaverStreamMixer2Way::SetMixValue);
+	ClassDB::bind_method(D_METHOD("get_blend_mode"), &StreamWeaverStreamMixer2Way::GetBlendMode);
+	ClassDB::bind_method(D_METHOD("set_blend_mode", "mode"), &StreamWeaverStreamMixer2Way::SetBlendMode);
+
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "input_stream_a", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverStream"), "set_input_stream_a", "get_input_stream_a");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "input_stream_b", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverStream"), "set_input_stream_b", "get_input_stream_b");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "mix_parameter", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverParameter"), "set_mix_parameter", "get_mix_parameter");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "mix_value", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_mix_value", "get_mix_value");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "blend_mode", PROPERTY_HINT_ENUM, "Linear,Equal Power"), "set_blend_mode", "get_blend_mode");
+
+	BIND_ENUM_CONSTANT(BLEND_LINEAR);
+	BIND_ENUM_CONSTANT(BLEND_EQUAL_POWER);
+}
+
+class StreamWeaverStreamMixer2WayRuntimeInstance : public StreamWeaverStreamRuntimeInstance {
+public:
+	StreamWeaverStreamRuntimeInstance* runtime_a = nullptr;
+	StreamWeaverStreamRuntimeInstance* runtime_b = nullptr;
+	StreamWeaverParameterRuntimeInstance* mix_param = nullptr;
+	float mix_value = 0.5f;
+	StreamWeaverStreamMixer2Way::BlendMode blend_mode = StreamWeaverStreamMixer2Way::BLEND_EQUAL_POWER;
+
+	float ramp_value = 0.5f;
+	float ramp_step = 0.0f;
+	bool ramp_initialized = false;
+
+	bool process_audio(AudioFrame *p_dst_buffer, int32_t p_frames, uint32_t p_generation) override {
+		bool has_a = false, has_b = false;
+		const AudioFrame *src_a = runtime_a ? runtime_a->pull_audio(p_frames, p_generation, has_a) : nullptr;
+		const AudioFrame *src_b = runtime_b ? runtime_b->pull_audio(p_frames, p_generation, has_b) : nullptr;
+
+		if (!has_a && !has_b) {
+			memset(p_dst_buffer, 0, sizeof(AudioFrame) * p_frames);
+			return false;
+		}
+
+		float target_mix = mix_param ? Math::clamp(mix_param->get_value(), 0.0f, 1.0f) : Math::clamp(mix_value, 0.0f, 1.0f);
+		if (!ramp_initialized) {
+			ramp_value = target_mix;
+			ramp_initialized = true;
+		}
+		ramp_step = (target_mix - ramp_value) / float(p_frames > 0 ? p_frames : 1);
+
+		for (int32_t i = 0; i < p_frames; ++i) {
+			float t = Math::clamp(ramp_value + ramp_step * float(i), 0.0f, 1.0f);
+			float ga, gb;
+			if (blend_mode == StreamWeaverStreamMixer2Way::BLEND_EQUAL_POWER) {
+				ga = Math::cos(t * Math_PI * 0.5f);
+				gb = Math::sin(t * Math_PI * 0.5f);
+			} else {
+				ga = 1.0f - t;
+				gb = t;
+			}
+			float l = 0.0f, r = 0.0f;
+			if (has_a && src_a) {
+				l += src_a[i].left * ga;
+				r += src_a[i].right * ga;
+			}
+			if (has_b && src_b) {
+				l += src_b[i].left * gb;
+				r += src_b[i].right * gb;
+			}
+			p_dst_buffer[i].left = l;
+			p_dst_buffer[i].right = r;
+		}
+		ramp_value += ramp_step * float(p_frames);
+		return true;
+	}
+};
+
+StreamWeaverStreamRuntimeInstance* StreamWeaverStreamMixer2Way::create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) {
+	auto* instance = memnew(StreamWeaverStreamMixer2WayRuntimeInstance);
+	if (input_stream_a.is_valid()) {
+		instance->runtime_a = from_playback->get_stream_runtime_instance(input_stream_a);
+	}
+	if (input_stream_b.is_valid()) {
+		instance->runtime_b = from_playback->get_stream_runtime_instance(input_stream_b);
+	}
+	if (mix_parameter.is_valid()) {
+		instance->mix_param = from_playback->get_parameter_runtime_instance(mix_parameter);
+	}
+	instance->mix_value = mix_value;
+	instance->blend_mode = blend_mode;
+	return instance;
+}
+
+void StreamWeaverStreamMixer2Way::release_runtime_instance(StreamWeaverStreamRuntimeInstance* instance) {
+	memdelete(dynamic_cast<StreamWeaverStreamMixer2WayRuntimeInstance*>(instance));
 }
 
 // -------------------- StreamWeaverAudioStream --------------------
@@ -1637,15 +1714,25 @@ void StreamWeaverAudioStream::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_parameters", "parameters"), &StreamWeaverAudioStream::SetParameters);
 	ClassDB::bind_method(D_METHOD("get_triggers"), &StreamWeaverAudioStream::GetTriggers);
 	ClassDB::bind_method(D_METHOD("set_triggers", "triggers"), &StreamWeaverAudioStream::SetTriggers);
-	ClassDB::bind_method(D_METHOD("get_inputs"), &StreamWeaverAudioStream::GetInputs);
-	ClassDB::bind_method(D_METHOD("set_inputs", "inputs"), &StreamWeaverAudioStream::SetInputs);
-	ClassDB::bind_method(D_METHOD("get_outputs"), &StreamWeaverAudioStream::GetOutputs);
-	ClassDB::bind_method(D_METHOD("set_outputs", "outputs"), &StreamWeaverAudioStream::SetOutputs);
+	ClassDB::bind_method(D_METHOD("get_streams"), &StreamWeaverAudioStream::GetStreams);
+	ClassDB::bind_method(D_METHOD("set_streams", "streams"), &StreamWeaverAudioStream::SetStreams);
+	ClassDB::bind_method(D_METHOD("get_master_streams"), &StreamWeaverAudioStream::GetMasterStreams);
+	ClassDB::bind_method(D_METHOD("set_master_streams", "master_streams"), &StreamWeaverAudioStream::SetMasterStreams);
 
+	ClassDB::bind_method(D_METHOD("get_master_output_position"), &StreamWeaverAudioStream::GetMasterOutputPosition);
+	ClassDB::bind_method(D_METHOD("set_master_output_position", "position"), &StreamWeaverAudioStream::SetMasterOutputPosition);
+	ClassDB::bind_method(D_METHOD("get_master_volume_db"), &StreamWeaverAudioStream::GetMasterVolumeDb);
+	ClassDB::bind_method(D_METHOD("set_master_volume_db", "volume_db"), &StreamWeaverAudioStream::SetMasterVolumeDb);
+	ClassDB::bind_method(D_METHOD("get_master_volume_multiplier"), &StreamWeaverAudioStream::GetMasterVolumeMultiplier);
+	ClassDB::bind_method(D_METHOD("set_master_volume_multiplier", "param"), &StreamWeaverAudioStream::SetMasterVolumeMultiplier);
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "parameters", PROPERTY_HINT_ARRAY_TYPE, "StreamWeaverParameter"), "set_parameters", "get_parameters");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "triggers", PROPERTY_HINT_ARRAY_TYPE, "StreamWeaverTrigger"), "set_triggers", "get_triggers");
-	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "inputs", PROPERTY_HINT_ARRAY_TYPE, "StreamWeaverInputStream"), "set_inputs", "get_inputs");
-	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "outputs", PROPERTY_HINT_ARRAY_TYPE, "StreamWeaverOutput"), "set_outputs", "get_outputs");
+	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "streams", PROPERTY_HINT_ARRAY_TYPE, "StreamWeaverStream"), "set_streams", "get_streams");
+	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "master_streams", PROPERTY_HINT_ARRAY_TYPE, "StreamWeaverStream"), "set_master_streams", "get_master_streams");
+
+	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "master_output_position"), "set_master_output_position", "get_master_output_position");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "master_volume_db"), "set_master_volume_db", "get_master_volume_db");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "master_volume_multiplier", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverParameter"), "set_master_volume_multiplier", "get_master_volume_multiplier");
 }
 
 Ref<AudioStreamPlayback> StreamWeaverAudioStream::_instantiate_playback() const {
@@ -1667,6 +1754,10 @@ void StreamWeaverAudioStreamPlayback::_bind_methods() {
 
 StreamWeaverAudioStreamPlayback::~StreamWeaverAudioStreamPlayback()
 {
+    for (auto& [stream, stream_instance] : all_streams)
+    {
+        stream->release_runtime_instance( stream_instance );
+    }
     for (auto& [parameter, parameter_instance] : all_parameters)
     {
         parameter->release_runtime_instance( parameter_instance );
@@ -1676,7 +1767,6 @@ StreamWeaverAudioStreamPlayback::~StreamWeaverAudioStreamPlayback()
         trigger->release_runtime_instance( trigger_instance );
     }
 }
-
 
 StreamWeaverParameterRuntimeInstance *StreamWeaverAudioStreamPlayback::
     get_parameter_runtime_instance( Ref<StreamWeaverParameter> parameter )
@@ -1710,26 +1800,73 @@ StreamWeaverTriggerRuntimeInstance *StreamWeaverAudioStreamPlayback::get_trigger
     return trigger_instance;
 }
 
+StreamWeaverStreamRuntimeInstance *StreamWeaverAudioStreamPlayback::get_stream_runtime_instance(
+    Ref<StreamWeaverStream> stream)
+{
+    if (stream.is_null()) {
+        return nullptr;
+    }
+    if (auto stream_instance = all_streams.getptr(stream)) {
+        return *stream_instance;
+    }
+    auto stream_instance = stream->create_runtime_instance(this);
+    if (!stream_instance) {
+        return nullptr;
+    }
+    all_streams.insert(stream, stream_instance);
+
+    if (auto producer = cast_to<StreamWeaverProducer>(stream.ptr())) {
+        for (int j = 0; j < producer->GetTriggers().size(); ++j) {
+            auto trigger = cast_to<StreamWeaverTrigger>(producer->GetTriggers()[j]);
+            if (trigger) {
+                auto trigger_runtime_instance = get_trigger_runtime_instance(trigger);
+                trigger_runtime_instance->add_triggerable(stream_instance);
+            }
+        }
+    }
+    return stream_instance;
+}
+
 void StreamWeaverAudioStreamPlayback::initialize(Ref<StreamWeaverAudioStream> parent) {
 	PROFILE_FUNCTION();
 	parent_stream = parent;
-	for (int i = 0; i < parent->GetOutputs().size(); ++i) {
-		const auto output = cast_to<StreamWeaverOutput>(parent->GetOutputs()[i]);
-		if (output == nullptr) {
-			continue;
-		}
-	    auto runtime_output = output->create_runtime_instance(this);
-	    for (int j = 0; j < output->GetTriggers().size(); ++j)
-	    {
-	        auto trigger = cast_to<StreamWeaverTrigger>(output->GetTriggers()[j]);
-	        if (trigger)
-	        {
-	            auto trigger_runtime_instance = get_trigger_runtime_instance(trigger);
-	            trigger_runtime_instance->add_triggerable( runtime_output );
-	        }
-	    }
-		runtime_outputs.push_back(runtime_output);
-	}
+
+    for (int i = 0; i < parent->GetParameters().size(); ++i) {
+        auto param = cast_to<StreamWeaverParameter>(parent->GetParameters()[i]);
+        if (param) {
+            get_parameter_runtime_instance(param);
+        }
+    }
+    for (int i = 0; i < parent->GetTriggers().size(); ++i) {
+        auto trig = cast_to<StreamWeaverTrigger>(parent->GetTriggers()[i]);
+        if (trig) {
+            get_trigger_runtime_instance(trig);
+        }
+    }
+    for (int i = 0; i < parent->GetStreams().size(); ++i) {
+        auto s = cast_to<StreamWeaverStream>(parent->GetStreams()[i]);
+        if (s) {
+            get_stream_runtime_instance(s);
+        }
+    }
+    master_stream_runtimes.clear();
+    for (int i = 0; i < parent->GetMasterStreams().size(); ++i) {
+        auto s = cast_to<StreamWeaverStream>(parent->GetMasterStreams()[i]);
+        if (s) {
+            auto runtime = get_stream_runtime_instance(s);
+            if (runtime) {
+                master_stream_runtimes.push_back(runtime);
+            }
+        }
+    }
+    if (parent->GetMasterVolumeMultiplier().is_valid()) {
+        master_volume_multiplier_runtime = get_parameter_runtime_instance(parent->GetMasterVolumeMultiplier());
+    } else {
+        master_volume_multiplier_runtime = nullptr;
+    }
+    master_base_volume_db = parent->GetMasterVolumeDb();
+    master_volume_ramp_initialized = false;
+
     last_tick_time = chrono_clock::now();
 }
 
@@ -1740,10 +1877,6 @@ void StreamWeaverAudioStreamPlayback::set_parameter(StringName parameter_name, f
 }
 
 void StreamWeaverAudioStreamPlayback::trigger(StringName trigger) {
-	// Called from the game thread. Serialize the whole dispatch against the audio
-	// thread's tick/mix passes. The dispatch only does map lookups and small
-	// push_backs, so the audio thread never spins on this for long. The
-	// triggerables invoked here must NOT re-acquire mix_lock (it is non-recursive).
 	SpinLockGuard guard(mix_lock);
 	if ( auto trigger_runtime_instance = input_triggers.getptr( trigger )) {
 		(*trigger_runtime_instance)->trigger_all_triggerables();
@@ -1771,11 +1904,6 @@ int32_t StreamWeaverAudioStreamPlayback::_mix(AudioFrame *p_buffer, float p_rate
     float delta = fseconds(now - last_tick_time).count();
     last_tick_time = now;
     {
-        // The tick pass mutates and reads trigger/output state shared with the
-        // game thread's trigger()/set_parameter(); serialize it. Metronome ticks
-        // can fire whole trigger chains from in here, so the lock must span the
-        // entire pass. Kept separate from the output-mix pass below so the much
-        // heavier granular synthesis does not run under the lock.
         SpinLockGuard guard(mix_lock);
         for (auto ticker : ticking_objects) {
             ticker->tick(delta);
@@ -1786,11 +1914,29 @@ int32_t StreamWeaverAudioStreamPlayback::_mix(AudioFrame *p_buffer, float p_rate
 		p_buffer[i].left = 0;
 		p_buffer[i].right = 0;
 	}
-	// The output-mix pass runs unlocked; each runtime instance that shares state
-	// with the game thread (currently only the randomize output) takes the lock
-	// itself for the narrow window it needs it.
-	for (auto runtime_output : runtime_outputs) {
-		runtime_output->mix_output_into_buffer(p_buffer, p_frames);
-	}
+
+    mix_generation++;
+
+    float target_vol = UtilityFunctions::db_to_linear(master_base_volume_db) *
+        (master_volume_multiplier_runtime ? master_volume_multiplier_runtime->get_value() : 1.0f);
+    if (!master_volume_ramp_initialized) {
+        master_volume_ramp_value = target_vol;
+        master_volume_ramp_initialized = true;
+    }
+    master_volume_ramp_step = (target_vol - master_volume_ramp_value) / float(p_frames > 0 ? p_frames : 1);
+
+    for (auto stream_runtime : master_stream_runtimes) {
+        bool has_audio = false;
+        const AudioFrame *src = stream_runtime->pull_audio(p_frames, mix_generation, has_audio);
+        if (has_audio && src) {
+            for (int i = 0; i < p_frames; ++i) {
+                float vol = master_volume_ramp_value + master_volume_ramp_step * float(i);
+                p_buffer[i].left += src[i].left * vol;
+                p_buffer[i].right += src[i].right * vol;
+            }
+        }
+    }
+    master_volume_ramp_value += master_volume_ramp_step * float(p_frames);
+
 	return p_frames;
 }

@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://c8y8y8v8y8v8v"]
 
-[ext_resource type="Script" uid="uid://b2h04517elv38" path="res://addons/streamweaver/graphnode/parameter_multiply_graph_node.gd" id="1_mult"]
+[ext_resource type="Script" uid="uid://b2h04517elv38" path="res://addons/StreamWeaver/graphnode/parameter_multiply_graph_node.gd" id="1_mult"]
 
 [node name="ParameterMultiply" type="GraphNode" unique_id=1570282010]
 offset_right = 250.0

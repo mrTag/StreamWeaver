@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://cv0y4omxi6v2s"]
 
-[ext_resource type="Script" uid="uid://ekbawiynuu7q" path="res://addons/streamweaver/graphnode/graph_edit.gd" id="1_u5icf"]
-[ext_resource type="Script" uid="uid://c3uv5v0wbjlil" path="res://addons/streamweaver/graphnode/stream_tester.gd" id="2_j1tki"]
+[ext_resource type="Script" uid="uid://ekbawiynuu7q" path="res://addons/StreamWeaver/graphnode/graph_edit.gd" id="1_u5icf"]
+[ext_resource type="Script" uid="uid://c3uv5v0wbjlil" path="res://addons/StreamWeaver/graphnode/stream_tester.gd" id="2_j1tki"]
 
 [sub_resource type="GDScript" id="GDScript_u5icf"]
 resource_name = "StreamWeaverMainWindow"

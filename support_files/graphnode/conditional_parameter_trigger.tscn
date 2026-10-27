@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://b8y7x6r5t4q3p"]
 
-[ext_resource type="Script" uid="uid://ccdbo8xu7opju" path="res://addons/streamweaver/graphnode/conditional_parameter_trigger_graph_node.gd" id="1_cond"]
+[ext_resource type="Script" uid="uid://ccdbo8xu7opju" path="res://addons/StreamWeaver/graphnode/conditional_parameter_trigger_graph_node.gd" id="1_cond"]
 
 [node name="ConditionalParameterTrigger" type="GraphNode" unique_id=1897876425]
 offset_right = 250.0

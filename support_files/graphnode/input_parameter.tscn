@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://cspsjet3opgmu"]
 
-[ext_resource type="Script" uid="uid://djsa78grt4mmu" path="res://addons/streamweaver/graphnode/input_parameter_graph_node.gd" id="1_prmr1"]
+[ext_resource type="Script" uid="uid://djsa78grt4mmu" path="res://addons/StreamWeaver/graphnode/input_parameter_graph_node.gd" id="1_prmr1"]
 
 [node name="StreamWeaverParameter" type="GraphNode" unique_id=1033756240]
 offset_right = 250.0

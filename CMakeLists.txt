@@ -16,6 +16,7 @@ list( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/" )
 
 # Turn off link time optimization for everything (has massive problems building)
 set( CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE OFF )
+set( CMAKE_POSITION_INDEPENDENT_CODE ON )
 
 # Output compile commands to compile_commands.json (for debugging CMake issues)
 set( CMAKE_EXPORT_COMPILE_COMMANDS ON )

@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://dw8x0v6v7v8v8"]
 
-[ext_resource type="Script" uid="uid://cu3nqhwwfjh3r" path="res://addons/streamweaver/graphnode/output_randomize_graph_node.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://cu3nqhwwfjh3r" path="res://addons/StreamWeaver/graphnode/output_randomize_graph_node.gd" id="1_script"]
 
 [node name="OutputRandomize" type="GraphNode" unique_id=2097835992]
 offset_right = 261.0
@@ -10,11 +10,11 @@ slot/0/left_enabled = false
 slot/0/left_type = 0
 slot/0/left_color = Color(0.2901961, 0.6392157, 1, 1)
 slot/0/left_icon = null
-slot/0/right_enabled = false
+slot/0/right_enabled = true
 slot/0/right_type = 0
-slot/0/right_color = Color(1, 1, 1, 1)
+slot/0/right_color = Color(0.2901961, 0.6392157, 1, 1)
 slot/0/right_icon = null
-slot/0/draw_stylebox = false
+slot/0/draw_stylebox = true
 slot/1/left_enabled = false
 slot/1/left_type = 2
 slot/1/left_color = Color(0, 0.81960785, 0.2, 1)

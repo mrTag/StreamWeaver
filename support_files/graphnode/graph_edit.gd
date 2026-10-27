@@ -4,28 +4,33 @@ extends GraphEdit
 # Register your node types here
 # Key = display name in menu
 # Value = PackedScene (GraphNode-based)
+var master_output_scene := preload("res://addons/StreamWeaver/graphnode/master_output.tscn")
+
 var node_types := {
-	"Input Stream": preload("res://addons/streamweaver/graphnode/input_stream.tscn"),
-	"Input Parameter": preload("res://addons/streamweaver/graphnode/input_parameter.tscn"),
-	"Input Trigger": preload("res://addons/streamweaver/graphnode/input_trigger.tscn"),
-	"Conditional Parameter Trigger": preload("res://addons/streamweaver/graphnode/conditional_parameter_trigger.tscn"),
-	"Conditional Range Trigger": preload("res://addons/streamweaver/graphnode/conditional_parameter_range_trigger.tscn"),
-	"Metronome Trigger": preload("res://addons/streamweaver/graphnode/metronome_trigger.tscn"),
-	"Delay Trigger": preload("res://addons/streamweaver/graphnode/delay_trigger.tscn"),
-	"Output Randomize": preload("res://addons/streamweaver/graphnode/output_randomize.tscn"),
-	"Output Looping": preload("res://addons/streamweaver/graphnode/output_loop.tscn"),
-	"Output Granular Sweep": preload("res://addons/streamweaver/graphnode/output_granular_linear_sweep.tscn"),
-	"Output Granular Database": preload("res://addons/streamweaver/graphnode/output_granular_database.tscn"),
-	"Parameter Add": preload("res://addons/streamweaver/graphnode/parameter_add.tscn"),
-	"Parameter Multiply": preload("res://addons/streamweaver/graphnode/parameter_multiply.tscn"),
-	"Parameter Follow": preload("res://addons/streamweaver/graphnode/parameter_follow.tscn"),
-	"Parameter Window": preload("res://addons/streamweaver/graphnode/parameter_window.tscn"),
-	"Parameter Remap": preload("res://addons/streamweaver/graphnode/parameter_remap.tscn")
+	"Input Stream": preload("res://addons/StreamWeaver/graphnode/input_stream.tscn"),
+	"Stream Mixer 2-Way": preload("res://addons/StreamWeaver/graphnode/stream_mixer_2way.tscn"),
+	"Input Parameter": preload("res://addons/StreamWeaver/graphnode/input_parameter.tscn"),
+	"Input Trigger": preload("res://addons/StreamWeaver/graphnode/input_trigger.tscn"),
+	"Conditional Parameter Trigger": preload("res://addons/StreamWeaver/graphnode/conditional_parameter_trigger.tscn"),
+	"Conditional Range Trigger": preload("res://addons/StreamWeaver/graphnode/conditional_parameter_range_trigger.tscn"),
+	"Metronome Trigger": preload("res://addons/StreamWeaver/graphnode/metronome_trigger.tscn"),
+	"Delay Trigger": preload("res://addons/StreamWeaver/graphnode/delay_trigger.tscn"),
+	"Output Randomize": preload("res://addons/StreamWeaver/graphnode/output_randomize.tscn"),
+	"Output Looping": preload("res://addons/StreamWeaver/graphnode/output_loop.tscn"),
+	"Output Granular Sweep": preload("res://addons/StreamWeaver/graphnode/output_granular_linear_sweep.tscn"),
+	"Output Granular Database": preload("res://addons/StreamWeaver/graphnode/output_granular_database.tscn"),
+	"Parameter Add": preload("res://addons/StreamWeaver/graphnode/parameter_add.tscn"),
+	"Parameter Multiply": preload("res://addons/StreamWeaver/graphnode/parameter_multiply.tscn"),
+	"Parameter Follow": preload("res://addons/StreamWeaver/graphnode/parameter_follow.tscn"),
+	"Parameter Window": preload("res://addons/StreamWeaver/graphnode/parameter_window.tscn"),
+	"Parameter Remap": preload("res://addons/StreamWeaver/graphnode/parameter_remap.tscn")
 }
 func _create_resource_for_node_type(node_type_name: String) -> Resource:
 	match node_type_name:
 		"Input Stream":
 			return InputStreamGraphNode.create_new_resource(current_resource)
+		"Stream Mixer 2-Way":
+			return StreamMixer2WayGraphNode.create_new_resource(current_resource)
 		"Input Parameter":
 			return InputParameterGraphNode.create_new_resource(current_resource)
 		"Input Trigger":
@@ -60,17 +65,17 @@ func _create_resource_for_node_type(node_type_name: String) -> Resource:
 
 func _get_node_type_for_resource(res: Resource) -> String:
 	if res is StreamWeaverInputStream: return "Input Stream"
+	if res is StreamWeaverStreamMixer2Way: return "Stream Mixer 2-Way"
 	if res is StreamWeaverParameterInput: return "Input Parameter"
 	if res is StreamWeaverTriggerInput: return "Input Trigger"
 	if res is StreamWeaverTriggerConditionalParameter: return "Conditional Parameter Trigger"
 	if res is StreamWeaverTriggerConditionalParameterRange: return "Conditional Range Trigger"
 	if res is StreamWeaverTriggerMetronome: return "Metronome Trigger"
 	if res is StreamWeaverTriggerDelay: return "Delay Trigger"
-	if res is StreamWeaverOutputRandomize: return "Output Randomize"
-	if res is StreamWeaverOutputLooping: return "Output Looping"
-	if res is StreamWeaverOutputGranularLinearSweep: return "Output Granular Sweep"
-	if res is StreamWeaverOutputGranularDatabase: return "Output Granular Database"
-	if res is StreamWeaverParameterAdd: return "Parameter Add"
+	if res is StreamWeaverStreamRandomize: return "Output Randomize"
+	if res is StreamWeaverStreamLooping: return "Output Looping"
+	if res is StreamWeaverStreamGranularLinearSweep: return "Output Granular Sweep"
+	if res is StreamWeaverStreamGranularDatabase: return "Output Granular Database"
 	if res is StreamWeaverParameterMultiply: return "Parameter Multiply"
 	if res is StreamWeaverParameterFollowInput: return "Parameter Follow"
 	if res is StreamWeaverParameterWindow: return "Parameter Window"
@@ -135,7 +140,7 @@ func _gui_input(event):
 				popup_menu.add_item("Add " + name, id)
 				id += 1
 			
-			if hovered_node:
+			if hovered_node and not (hovered_node is MasterOutputGraphNode):
 				popup_menu.add_separator()
 				var node_name := hovered_node.name
 				if "current_resource" in hovered_node:
@@ -143,14 +148,14 @@ func _gui_input(event):
 					if res_name != "":
 						node_name = res_name
 				popup_menu.add_item("Delete " + str(node_name), DELETE_NODE_ID)
-			
-			popup_menu.popup()
 			popup_menu.set_position(get_window().position + Vector2i(get_global_mouse_position()))
 
 
 func _on_popup_id_pressed(id):
 	if id == DELETE_NODE_ID:
 		if hovered_node:
+			if hovered_node is MasterOutputGraphNode:
+				return
 			var res = hovered_node.get("current_resource")
 			var orginal_node_name := hovered_node.name
 			var connections := get_connection_list_from_node(hovered_node.name)
@@ -224,7 +229,18 @@ func disconnect_connections(connections: Array):
 			node_to.disconnect_from(node_from, connection["from_port"], connection["to_port"])
 			disconnect_node(connection["from_node"], connection["from_port"], connection["to_node"], connection["to_port"])
 
+func _has_path(from_node_name: StringName, to_node_name: StringName) -> bool:
+	if from_node_name == to_node_name:
+		return true
+	for conn in get_connection_list():
+		if conn["from_node"] == from_node_name:
+			if _has_path(conn["to_node"], to_node_name):
+				return true
+	return false
+
 func _on_connection_request(from_node: StringName, from_port: int, to_node: StringName, to_port: int):
+	if _has_path(to_node, from_node):
+		return
 	var node_from = get_node(String(from_node))
 	var node_to = get_node(String(to_node))
 	
@@ -264,24 +280,24 @@ func edit_streamweaver_resource(streamweaver_resource: StreamWeaverAudioStream):
 		return
 	
 	var nodes_to_load = {
-		"Input Stream": current_resource.inputs,
+		"Input Stream": current_resource.streams,
+		"Stream Mixer 2-Way": current_resource.streams,
+		"Output Randomize": current_resource.streams,
+		"Output Looping": current_resource.streams,
+		"Output Granular Sweep": current_resource.streams,
+		"Output Granular Database": current_resource.streams,
 		"Input Parameter": current_resource.parameters,
 		"Input Trigger": current_resource.triggers,
 		"Conditional Parameter Trigger": current_resource.triggers,
 		"Conditional Range Trigger": current_resource.triggers,
 		"Metronome Trigger": current_resource.triggers,
 		"Delay Trigger": current_resource.triggers,
-		"Output Randomize": current_resource.outputs,
-		"Output Looping": current_resource.outputs,
-		"Output Granular Sweep": current_resource.outputs,
-		"Output Granular Database": current_resource.outputs,
 		"Parameter Add": current_resource.parameters,
 		"Parameter Multiply": current_resource.parameters,
 		"Parameter Follow": current_resource.parameters,
 		"Parameter Window": current_resource.parameters,
 		"Parameter Remap": current_resource.parameters
 	}
-	
 	var all_nodes : Array[GraphNode] = []
 	
 	for type_name in nodes_to_load:
@@ -300,6 +316,13 @@ func edit_streamweaver_resource(streamweaver_resource: StreamWeaverAudioStream):
 			all_nodes.append(node_instance)
 			counter += 1
 	
+	# Spawn Master Output node
+	var master_node = master_output_scene.instantiate()
+	master_node.name = "Master Output"
+	add_child(master_node)
+	master_node.initialize(current_resource)
+	all_nodes.append(master_node)
+
 	# Restore connections
 	for node_to in all_nodes:
 		if node_to.has_method("get_left_port_connections"):
