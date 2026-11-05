@@ -2211,10 +2211,10 @@ func _on_db_picker_changed(res: Resource) -> void:
 
 
 func _on_new_database_pressed() -> void:
-	var dialog := FileDialog.new()
-	dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
-	dialog.filters = PackedStringArray(["*.res ; Godot Binary Resource", "*.tres ; Godot Text Resource (legacy)"])
-	dialog.access = FileDialog.ACCESS_RESOURCES
+	var dialog := EditorFileDialog.new()
+	dialog.file_mode = EditorFileDialog.FILE_MODE_SAVE_FILE
+	dialog.add_filter("*.res", "Godot Binary Resource")
+	dialog.add_filter("*.tres", "Godot Text Resource (legacy)")
 	dialog.current_file = "grains_database.res"
 	dialog.file_selected.connect(func(path: String):
 		var fresh := StreamWeaverGrainsDatabase.new()
@@ -2223,6 +2223,7 @@ func _on_new_database_pressed() -> void:
 			_status_label.text = "New database save failed: error %d" % err
 			dialog.queue_free()
 			return
+		EditorInterface.get_resource_filesystem().scan()
 		var loaded := load(path) as StreamWeaverGrainsDatabase
 		_db_path = path
 		_set_database(loaded)
@@ -2232,7 +2233,7 @@ func _on_new_database_pressed() -> void:
 	)
 	dialog.canceled.connect(func(): dialog.queue_free())
 	add_child(dialog)
-	dialog.popup_centered(Vector2i(700, 500))
+	dialog.popup_file_dialog()
 
 
 func _on_save_pressed() -> void:
@@ -2247,11 +2248,13 @@ func _on_save_pressed() -> void:
 func _on_save_as_pressed() -> void:
 	if _grains_database == null:
 		return
-	var dialog := FileDialog.new()
-	dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
-	dialog.filters = PackedStringArray(["*.res ; Godot Binary Resource", "*.tres ; Godot Text Resource (legacy)"])
-	dialog.access = FileDialog.ACCESS_RESOURCES
+	var dialog := EditorFileDialog.new()
+	dialog.file_mode = EditorFileDialog.FILE_MODE_SAVE_FILE
+	dialog.add_filter("*.res", "Godot Binary Resource")
+	dialog.add_filter("*.tres", "Godot Text Resource (legacy)")
 	dialog.current_file = "grains_database.res" if _db_path.is_empty() else _db_path.get_file()
+	if not _db_path.is_empty():
+		dialog.current_dir = _db_path.get_base_dir()
 	dialog.file_selected.connect(func(path: String):
 		_db_path = path
 		_save_to_path(path)
@@ -2259,14 +2262,14 @@ func _on_save_as_pressed() -> void:
 	)
 	dialog.canceled.connect(func(): dialog.queue_free())
 	add_child(dialog)
-	dialog.popup_centered(Vector2i(700, 500))
-
+	dialog.popup_file_dialog()
 
 func _save_to_path(path: String) -> void:
 	if _compact_on_save_check.button_pressed and not _grains_database.is_compact():
 		_grains_database.compact_pcm_pool()
 	var err := ResourceSaver.save(_grains_database, path)
 	if err == OK:
+		EditorInterface.get_resource_filesystem().scan()
 		_dirty = false
 		_refresh_header()
 		_refresh_overview()

@@ -64,8 +64,8 @@ public:
 	[[nodiscard]] godot::Ref<godot::AudioStream> GetAudioStream() const { return audio_stream; }
 	void SetAudioStream(godot::Ref<godot::AudioStream> audioStream) { audio_stream = audioStream; }
 
-	StreamWeaverStreamRuntimeInstance* create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override { return nullptr; }
-	void release_runtime_instance(StreamWeaverStreamRuntimeInstance* instance) override {}
+	StreamWeaverStreamRuntimeInstance* create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
+	void release_runtime_instance(StreamWeaverStreamRuntimeInstance* instance) override;
 };
 
 class StreamWeaverParameterRuntimeInstance
@@ -390,38 +390,48 @@ protected:
     uint32_t last_mix_generation = 0;
     godot::LocalVector<godot::AudioFrame> cached_buffer;
     bool cached_has_audio = false;
+    int32_t cached_frames_produced = 0;
 
 public:
     ~StreamWeaverStreamRuntimeInstance() override = default;
     void trigger() override {}
+    virtual void reset() {}
+    virtual float get_remaining_playback_time_s() const { return -1.0f; }
 
-    const godot::AudioFrame* pull_audio(int32_t p_frames, uint32_t p_generation, bool &r_has_audio) {
+    const godot::AudioFrame* pull_audio(int32_t p_frames, uint32_t p_generation, bool &r_has_audio, int32_t *r_frames_produced = nullptr) {
         if (last_mix_generation == p_generation) {
             r_has_audio = cached_has_audio;
+            if (r_frames_produced) {
+                *r_frames_produced = cached_frames_produced;
+            }
             return cached_buffer.ptr();
         }
         last_mix_generation = p_generation;
         if (static_cast<int32_t>(cached_buffer.size()) < p_frames) {
             cached_buffer.resize(p_frames);
         }
-        cached_has_audio = process_audio(cached_buffer.ptr(), p_frames, p_generation);
+        cached_frames_produced = process_audio(cached_buffer.ptr(), p_frames, p_generation);
+        cached_has_audio = cached_frames_produced > 0;
         r_has_audio = cached_has_audio;
+        if (r_frames_produced) {
+            *r_frames_produced = cached_frames_produced;
+        }
         return cached_buffer.ptr();
     }
 
-    virtual bool process_audio(godot::AudioFrame *p_dst_buffer, int32_t p_frames, uint32_t p_generation) = 0;
+    virtual int32_t process_audio(godot::AudioFrame *p_dst_buffer, int32_t p_frames, uint32_t p_generation) = 0;
 };
 
 class StreamWeaverProducerRuntimeInstanceBase : public StreamWeaverStreamRuntimeInstance {
 public:
 	~StreamWeaverProducerRuntimeInstanceBase() override = default;
 
-    bool process_audio(godot::AudioFrame *p_dst_buffer, int32_t p_frames, uint32_t p_generation) override {
+    int32_t process_audio(godot::AudioFrame *p_dst_buffer, int32_t p_frames, uint32_t p_generation) override {
         memset(p_dst_buffer, 0, sizeof(godot::AudioFrame) * p_frames);
         return mix_output_into_buffer(p_dst_buffer, p_frames);
     }
 
-	virtual bool mix_output_into_buffer(godot::AudioFrame *p_buffer, int32_t p_frames) = 0;
+	virtual int32_t mix_output_into_buffer(godot::AudioFrame *p_buffer, int32_t p_frames) = 0;
 
     godot::SpinLock* playback_lock = nullptr;
 
@@ -572,7 +582,7 @@ class StreamWeaverStreamGranularDatabase : public StreamWeaverProducer {
     float random_walk_step = 5.0f;
     float random_walk_damping = 0.5f;
     float preferred_match_bias = 0.0f;
-
+    float phase_alignment_ms = 0.0f;
 public:
     [[nodiscard]] godot::Ref<StreamWeaverGrainsDatabase> GetGrainsDatabase() const { return grains_database; }
     void SetGrainsDatabase(godot::Ref<StreamWeaverGrainsDatabase> db) { grains_database = db; }
@@ -598,6 +608,8 @@ public:
     void SetRandomWalkDamping(float damping) { random_walk_damping = damping; }
     [[nodiscard]] float GetPreferredMatchBias() const { return preferred_match_bias; }
     void SetPreferredMatchBias(float bias) { preferred_match_bias = bias; }
+    [[nodiscard]] float GetPhaseAlignmentMs() const { return phase_alignment_ms; }
+    void SetPhaseAlignmentMs(float ms) { phase_alignment_ms = ms; }
 
     StreamWeaverProducerRuntimeInstanceBase *create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
 };
@@ -638,6 +650,61 @@ public:
 	void release_runtime_instance(StreamWeaverStreamRuntimeInstance* instance) override;
 };
 VARIANT_ENUM_CAST(StreamWeaverStreamMixer2Way::BlendMode);
+
+class StreamWeaverStream3Slice : public StreamWeaverStream {
+	GDCLASS(StreamWeaverStream3Slice, StreamWeaverStream)
+public:
+	enum TransitionMode {
+		TRANSITION_SAMPLE_PERFECT = 0,
+		TRANSITION_CROSSFADE = 1,
+	};
+	enum StopMode {
+		STOP_IMMEDIATE = 0,
+		STOP_FINISH_INTRO = 1,
+	};
+
+protected:
+	static void _bind_methods();
+
+	godot::Ref<StreamWeaverStream> intro_stream;
+	godot::Ref<StreamWeaverStream> loop_stream;
+	godot::Ref<StreamWeaverStream> outro_stream;
+	godot::Ref<StreamWeaverTrigger> start_trigger;
+	godot::Ref<StreamWeaverTrigger> stop_trigger;
+	TransitionMode transition_mode = TRANSITION_SAMPLE_PERFECT;
+	StopMode stop_mode = STOP_IMMEDIATE;
+	float crossfade_time = 0.05f;
+
+public:
+	[[nodiscard]] godot::Ref<StreamWeaverStream> GetIntroStream() const { return intro_stream; }
+	void SetIntroStream(godot::Ref<StreamWeaverStream> p_stream) { intro_stream = p_stream; }
+
+	[[nodiscard]] godot::Ref<StreamWeaverStream> GetLoopStream() const { return loop_stream; }
+	void SetLoopStream(godot::Ref<StreamWeaverStream> p_stream) { loop_stream = p_stream; }
+
+	[[nodiscard]] godot::Ref<StreamWeaverStream> GetOutroStream() const { return outro_stream; }
+	void SetOutroStream(godot::Ref<StreamWeaverStream> p_stream) { outro_stream = p_stream; }
+
+	[[nodiscard]] godot::Ref<StreamWeaverTrigger> GetStartTrigger() const { return start_trigger; }
+	void SetStartTrigger(godot::Ref<StreamWeaverTrigger> p_trigger) { start_trigger = p_trigger; }
+
+	[[nodiscard]] godot::Ref<StreamWeaverTrigger> GetStopTrigger() const { return stop_trigger; }
+	void SetStopTrigger(godot::Ref<StreamWeaverTrigger> p_trigger) { stop_trigger = p_trigger; }
+
+	[[nodiscard]] int GetTransitionMode() const { return transition_mode; }
+	void SetTransitionMode(int p_mode) { transition_mode = static_cast<TransitionMode>(p_mode); }
+
+	[[nodiscard]] int GetStopMode() const { return stop_mode; }
+	void SetStopMode(int p_mode) { stop_mode = static_cast<StopMode>(p_mode); }
+
+	[[nodiscard]] float GetCrossfadeTime() const { return crossfade_time; }
+	void SetCrossfadeTime(float p_time) { crossfade_time = p_time; }
+
+	StreamWeaverStreamRuntimeInstance* create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
+	void release_runtime_instance(StreamWeaverStreamRuntimeInstance* instance) override;
+};
+VARIANT_ENUM_CAST(StreamWeaverStream3Slice::TransitionMode);
+VARIANT_ENUM_CAST(StreamWeaverStream3Slice::StopMode);
 
 class StreamWeaverAudioStream : public godot::AudioStream {
 	GDCLASS(StreamWeaverAudioStream, AudioStream)

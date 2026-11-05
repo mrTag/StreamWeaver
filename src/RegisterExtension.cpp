@@ -30,6 +30,7 @@ namespace
         godot::ClassDB::register_abstract_class<StreamWeaverStream>();
         godot::ClassDB::register_class<StreamWeaverInputStream>();
         godot::ClassDB::register_class<StreamWeaverStreamMixer2Way>();
+        godot::ClassDB::register_class<StreamWeaverStream3Slice>();
 
         godot::ClassDB::register_abstract_class<StreamWeaverProducer>();
         godot::ClassDB::register_class<StreamWeaverStreamRandomize>();

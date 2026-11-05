@@ -24,6 +24,7 @@ var _axis_labels: Array[Label] = []
 @onready var random_walk_step : SpinBox = %RandomWalkStep
 @onready var random_walk_damping : SpinBox = %RandomWalkDamping
 @onready var preferred_match_bias : SpinBox = %PreferredMatchBias
+@onready var phase_alignment : SpinBox = %PhaseAlignment
 @onready var database_picker : EditorResourcePicker = %DatabasePicker
 @onready var database_label : Label = %DatabaseLabel
 @onready var volume_label : Label = %VolumeMultiplierLabel
@@ -41,6 +42,7 @@ func _ready():
 	random_walk_step.value_changed.connect(_on_random_walk_step_changed)
 	random_walk_damping.value_changed.connect(_on_random_walk_damping_changed)
 	preferred_match_bias.value_changed.connect(_on_preferred_match_bias_changed)
+	phase_alignment.value_changed.connect(_on_phase_alignment_changed)
 	database_picker.resource_changed.connect(_on_database_changed)
 	dragged.connect(_on_dragged)
 
@@ -229,6 +231,9 @@ func _on_random_walk_damping_changed(value: float):
 func _on_preferred_match_bias_changed(value: float):
 	_commit_numeric_property("Change Preferred Match Bias", "preferred_match_bias", value)
 
+func _on_phase_alignment_changed(value: float):
+	_commit_numeric_property("Change Phase Alignment", "phase_alignment_ms", value)
+
 
 func _on_database_changed(resource):
 	if current_resource == null:
@@ -351,6 +356,8 @@ func _update_ui():
 			random_walk_damping.value = current_resource.random_walk_damping
 		if preferred_match_bias.value != current_resource.preferred_match_bias:
 			preferred_match_bias.value = current_resource.preferred_match_bias
+		if phase_alignment.value != current_resource.phase_alignment_ms:
+			phase_alignment.value = current_resource.phase_alignment_ms
 
 		if database_picker.edited_resource != current_resource.grains_database:
 			database_picker.edited_resource = current_resource.grains_database

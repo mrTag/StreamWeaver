@@ -205,22 +205,23 @@ func _on_dragged(_from: Vector2, to: Vector2):
 		undo_redo.commit_action()
 
 func _update_ui():
-	if current_resource:
-		if name_edit.text != current_resource.output_name:
-			name_edit.text = current_resource.output_name
+	if not current_resource:
+		return
+	if name_edit and name_edit.text != current_resource.output_name:
+		name_edit.text = current_resource.output_name
 
-		if randomize_pitch_offset.value != current_resource.randomize_pitch:
-			randomize_pitch_offset.value = current_resource.randomize_pitch
-		if randomize_volume_offset.value != current_resource.randomize_volume:
-			randomize_volume_offset.value = current_resource.randomize_volume
+	if randomize_pitch_offset and randomize_pitch_offset.value != current_resource.randomize_pitch:
+		randomize_pitch_offset.value = current_resource.randomize_pitch
+	if randomize_volume_offset and randomize_volume_offset.value != current_resource.randomize_volume:
+		randomize_volume_offset.value = current_resource.randomize_volume
+	
+	if base_pitch and base_pitch.value != current_resource.base_pitch:
+		base_pitch.value = current_resource.base_pitch
+	if base_volume and base_volume.value != current_resource.base_volume_db:
+		base_volume.value = current_resource.base_volume_db
+	
+	# Important: update position_offset if it changed
+	if position_offset != current_resource.graph_node_position:
+		position_offset = current_resource.graph_node_position
 		
-		if base_pitch.value != current_resource.base_pitch:
-			base_pitch.value = current_resource.base_pitch
-		if base_volume.value != current_resource.base_volume_db:
-			base_volume.value = current_resource.base_volume_db
-		
-		# Important: update position_offset if it changed
-		if position_offset != current_resource.graph_node_position:
-			position_offset = current_resource.graph_node_position
-			
-		current_resource.emit_changed()
+	current_resource.emit_changed()

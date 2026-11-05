@@ -6,6 +6,7 @@
 #include "profiling.h"
 
 #include <algorithm>
+#include <cstdio>
 
 using namespace godot;
 
@@ -17,6 +18,63 @@ void StreamWeaverInputStream::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_audio_stream", "audio_stream"), &StreamWeaverInputStream::SetAudioStream);
 	ADD_PROPERTY(PropertyInfo(Variant::STRING_NAME, "input_name"), "set_input_name", "get_input_name");
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "audio_stream", PROPERTY_HINT_RESOURCE_TYPE, "AudioStream"), "set_audio_stream", "get_audio_stream");
+}
+class StreamWeaverInputStreamRuntimeInstance : public StreamWeaverStreamRuntimeInstance {
+public:
+	Ref<AudioStream> audio_stream;
+	Ref<AudioStreamPlayback> playback;
+	bool is_playing = false;
+
+	void reset() override {
+		if (audio_stream.is_valid()) {
+			playback = audio_stream->instantiate_playback();
+			if (playback.is_valid()) {
+				playback->start();
+				is_playing = true;
+			}
+		}
+	}
+	float get_remaining_playback_time_s() const override {
+		if (!is_playing || playback.is_null() || audio_stream.is_null()) {
+			return 0.0f;
+		}
+		double len = audio_stream->get_length();
+		if (len <= 0.0) {
+			return -1.0f;
+		}
+		double pos = playback->get_playback_position();
+		return Math::max(0.0f, float(len - pos));
+	}
+
+	int32_t process_audio(AudioFrame *p_dst_buffer, int32_t p_frames, uint32_t p_generation) override {
+		if (!is_playing || playback.is_null()) {
+			memset(p_dst_buffer, 0, sizeof(AudioFrame) * p_frames);
+			return 0;
+		}
+		auto mixed = playback->mix_audio(1.0f, p_frames);
+		int32_t num = Math::min(p_frames, static_cast<int32_t>(mixed.size()));
+		for (int i = 0; i < num; ++i) {
+			p_dst_buffer[i].left = mixed[i].x;
+			p_dst_buffer[i].right = mixed[i].y;
+		}
+		if (num < p_frames) {
+			memset(p_dst_buffer + num, 0, sizeof(AudioFrame) * (p_frames - num));
+			is_playing = false;
+		}
+		return num;
+	}
+};
+
+StreamWeaverStreamRuntimeInstance* StreamWeaverInputStream::create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) {
+	auto* instance = memnew(StreamWeaverInputStreamRuntimeInstance);
+	instance->audio_stream = audio_stream;
+	return instance;
+}
+
+void StreamWeaverInputStream::release_runtime_instance(StreamWeaverStreamRuntimeInstance* instance) {
+	if (instance) {
+		memdelete(instance);
+	}
 }
 
 // -------------------- StreamWeaverParameter -------------------------
@@ -123,7 +181,9 @@ StreamWeaverParameterRuntimeInstance* StreamWeaverParameterRemap::create_runtime
 
 void StreamWeaverParameterRemap::release_runtime_instance(StreamWeaverParameterRuntimeInstance* instance)
 {
-    memdelete(dynamic_cast<StreamWeaverParameterRemapRuntimeInstance*>(instance));
+	if (instance) {
+		memdelete(instance);
+	}
 }
 
 // -------------------- StreamWeaverParameterAdd ------------------
@@ -183,7 +243,9 @@ StreamWeaverParameterRuntimeInstance* StreamWeaverParameterAdd::create_runtime_i
 
 void StreamWeaverParameterAdd::release_runtime_instance(StreamWeaverParameterRuntimeInstance* instance)
 {
-    memdelete(dynamic_cast<StreamWeaverParameterAddRuntimeInstance*>(instance));
+	if (instance) {
+		memdelete(instance);
+	}
 }
 
 // -------------------- StreamWeaverParameterMultiply ------------------
@@ -244,7 +306,9 @@ StreamWeaverParameterRuntimeInstance* StreamWeaverParameterMultiply::create_runt
 
 void StreamWeaverParameterMultiply::release_runtime_instance(StreamWeaverParameterRuntimeInstance* instance)
 {
-    memdelete(dynamic_cast<StreamWeaverParameterMultiplyRuntimeInstance*>(instance));
+	if (instance) {
+		memdelete(instance);
+	}
 }
 
 // -------------------- StreamWeaverParameterFollowInput ------------------
@@ -328,7 +392,9 @@ StreamWeaverParameterRuntimeInstance* StreamWeaverParameterFollowInput::create_r
     auto runtime_instance = memnew(StreamWeaverParameterFollowInputRuntimeInstance);
     if (input_parameter.is_valid()) {
         runtime_instance->input_parameter_runtime_instance = from_playback->get_parameter_runtime_instance(input_parameter);
-        runtime_instance->set_current_value(runtime_instance->input_parameter_runtime_instance->get_value());
+        if (runtime_instance->input_parameter_runtime_instance) {
+            runtime_instance->set_current_value(runtime_instance->input_parameter_runtime_instance->get_value());
+        }
     }
     runtime_instance->acceleration = acceleration;
     runtime_instance->max_speed = max_speed;
@@ -338,7 +404,9 @@ StreamWeaverParameterRuntimeInstance* StreamWeaverParameterFollowInput::create_r
 
 void StreamWeaverParameterFollowInput::release_runtime_instance(StreamWeaverParameterRuntimeInstance* instance)
 {
-    memdelete(dynamic_cast<StreamWeaverParameterFollowInputRuntimeInstance*>(instance));
+	if (instance) {
+		memdelete(instance);
+	}
 }
 
 // -------------------- StreamWeaverParameterWindow ------------------------
@@ -436,7 +504,9 @@ StreamWeaverParameterRuntimeInstance* StreamWeaverParameterWindow::create_runtim
 
 void StreamWeaverParameterWindow::release_runtime_instance(StreamWeaverParameterRuntimeInstance* instance)
 {
-    memdelete(dynamic_cast<StreamWeaverParameterWindowRuntimeInstance*>(instance));
+	if (instance) {
+		memdelete(instance);
+	}
 }
 
 // -------------------- StreamWeaverTrigger -------------------------
@@ -532,7 +602,9 @@ StreamWeaverTriggerRuntimeInstance* StreamWeaverTriggerConditionalParameter::cre
     if (input_trigger.is_valid())
     {
         auto input_trigger_runtime_instance = from_playback->get_trigger_runtime_instance(input_trigger);
-        input_trigger_runtime_instance->add_triggerable(instance);
+        if (input_trigger_runtime_instance) {
+            input_trigger_runtime_instance->add_triggerable(instance);
+        }
     }
     instance->comparison_type = comparison_type;
     instance->value = value;
@@ -540,7 +612,9 @@ StreamWeaverTriggerRuntimeInstance* StreamWeaverTriggerConditionalParameter::cre
 }
 
 void StreamWeaverTriggerConditionalParameter::release_runtime_instance(StreamWeaverTriggerRuntimeInstance* instance) {
-    memdelete( dynamic_cast<StreamWeaverTriggerRuntimeInstanceConditionalParameter*>(instance));
+	if (instance) {
+		memdelete(instance);
+	}
 }
 
 // -------------------- StreamWeaverTriggerConditionalParameterRange --------------------
@@ -587,7 +661,9 @@ StreamWeaverTriggerRuntimeInstance* StreamWeaverTriggerConditionalParameterRange
     if (input_trigger.is_valid())
     {
         auto input_trigger_runtime_instance = from_playback->get_trigger_runtime_instance(input_trigger);
-        input_trigger_runtime_instance->add_triggerable(runtime_instance);
+        if (input_trigger_runtime_instance) {
+            input_trigger_runtime_instance->add_triggerable(runtime_instance);
+        }
     }
     runtime_instance->min_value = min_value;
     runtime_instance->max_value = max_value;
@@ -596,7 +672,9 @@ StreamWeaverTriggerRuntimeInstance* StreamWeaverTriggerConditionalParameterRange
 
 void StreamWeaverTriggerConditionalParameterRange::release_runtime_instance(StreamWeaverTriggerRuntimeInstance* instance)
 {
-    memdelete(dynamic_cast<StreamWeaverTriggerRuntimeInstanceConditionalParameterRange*>(instance));
+	if (instance) {
+		memdelete(instance);
+	}
 }
 
 // -------------------- StreamWeaverTriggerDelay --------------------
@@ -648,7 +726,9 @@ StreamWeaverTriggerRuntimeInstance* StreamWeaverTriggerDelay::create_runtime_ins
     instance->delay_time = delay_time;
     if (input_trigger.is_valid()) {
         auto input_trigger_runtime_instance = from_playback->get_trigger_runtime_instance(input_trigger);
-        input_trigger_runtime_instance->add_triggerable(instance);
+        if (input_trigger_runtime_instance) {
+            input_trigger_runtime_instance->add_triggerable(instance);
+        }
     }
     if (multiplier_parameter.is_valid()) {
         instance->multiplier_parameter_runtime_instance = from_playback->get_parameter_runtime_instance(multiplier_parameter);
@@ -658,7 +738,9 @@ StreamWeaverTriggerRuntimeInstance* StreamWeaverTriggerDelay::create_runtime_ins
 }
 
 void StreamWeaverTriggerDelay::release_runtime_instance(StreamWeaverTriggerRuntimeInstance* instance) {
-    memdelete(dynamic_cast<StreamWeaverTriggerRuntimeInstanceDelay*>(instance));
+	if (instance) {
+		memdelete(instance);
+	}
 }
 
 // -------------------- StreamWeaverTriggerMetronome ----------
@@ -717,7 +799,9 @@ StreamWeaverTriggerRuntimeInstance *StreamWeaverTriggerMetronome::create_runtime
 void StreamWeaverTriggerMetronome::release_runtime_instance(
     StreamWeaverTriggerRuntimeInstance *instance )
 {
-    memdelete(dynamic_cast<StreamWeaverTriggerRuntimeInstanceMetronome*>(instance));
+	if (instance) {
+		memdelete(instance);
+	}
 }
 
 // -------------------- StreamWeaverStream --------------------
@@ -798,43 +882,54 @@ public:
 	void trigger() override {
 		if (inputs.is_empty())
 			return;
-		RuntimeInputData runtime_input {};
 		int input_index = randomizer->randi_range(0, inputs.size()-1);
 		// super simple way to not play the same sound twice in a row:
 		if (input_index == last_played_index && inputs.size() > 1) {
 			input_index = (input_index + 1) % inputs.size();
 		}
 		last_played_index = input_index;
-	    runtime_input.playback = inputs[input_index]->GetAudioStream()->instantiate_playback();
-	    runtime_input.playback->start();
+		if (inputs[input_index].is_null() || inputs[input_index]->GetAudioStream().is_null()) {
+			return;
+		}
+		auto playback = inputs[input_index]->GetAudioStream()->instantiate_playback();
+		if (playback.is_null()) {
+			return;
+		}
+		playback->start();
+		RuntimeInputData runtime_input {};
+		runtime_input.playback = playback;
 		runtime_input.pitch_offset = randomizer->randf_range(-randomize_pitch, randomize_pitch);
 		runtime_input.volume_offset = randomizer->randf_range(-randomize_volume, randomize_volume);
 		currently_playing_inputs.push_back(runtime_input);
 	}
+	void reset() override {
+		SpinLockGuard guard(*playback_lock);
+		currently_playing_inputs.clear();
+		trigger();
+	}
 
-	bool mix_output_into_buffer(AudioFrame *p_buffer, int32_t p_frames) override {
-		// currently_playing_inputs is mutated by trigger() on the game thread
-		// (and by metronome-driven triggers during the tick pass). Hold the
-		// playback lock for the whole traversal so push_back can't reallocate the
-		// vector — or free the element we're about to mix — mid-iteration.
+	int32_t mix_output_into_buffer(AudioFrame *p_buffer, int32_t p_frames) override {
 		SpinLockGuard guard(*playback_lock);
 		if (currently_playing_inputs.is_empty()) {
-			return false;
+			return 0;
 		}
 		PROFILE_FUNCTION();
 		size_t current_input_index = 0;
 	    float pitch = get_pitch();
 	    begin_volume_block(p_frames);
+		int max_frames_mixed = 0;
 		while (current_input_index < currently_playing_inputs.size()) {
 			auto& cpi = currently_playing_inputs[current_input_index];
 		    if (!cpi.playback.is_valid())
 		    {
-		        // this is a weird one, but sometimes the playback becomes invalid?
 		        currently_playing_inputs.remove_at(current_input_index);
 		        continue;
 		    }
 			auto mixed_input = cpi.playback->mix_audio(pitch + cpi.pitch_offset, p_frames);
 		    int num_frames_mixed = Math::min( p_frames, static_cast<int32_t>( mixed_input.size() ) );
+			if (num_frames_mixed > max_frames_mixed) {
+				max_frames_mixed = num_frames_mixed;
+			}
 			for (int i = 0; i < num_frames_mixed; i++) {
 				p_buffer[i].left += mixed_input[i].x * (volume_at(i) + cpi.volume_offset);
 				p_buffer[i].right += mixed_input[i].y * (volume_at(i) + cpi.volume_offset);
@@ -848,7 +943,7 @@ public:
 			}
 		}
 		end_volume_block(p_frames);
-		return true;
+		return max_frames_mixed;
 	}
 };
 
@@ -859,7 +954,9 @@ StreamWeaverProducerRuntimeInstanceBase *StreamWeaverStreamRandomize::create_run
 	instance->randomize_pitch = randomize_pitch_offset;
 	instance->randomize_volume = randomize_volume_offset;
 	for (Ref<StreamWeaverInputStream> input : input_streams) {
-        instance->inputs.push_back(input);
+		if (input.is_valid() && input->GetAudioStream().is_valid()) {
+			instance->inputs.push_back(input);
+		}
 	}
 	static int random_seed = 54631;
 	random_seed += 24462;
@@ -882,23 +979,26 @@ public:
     Ref<AudioStreamPlayback> playback;
 
 	void trigger() override {
-        // this one will keep playing the looping audio in the background, no triggering.
 	}
 
-	bool mix_output_into_buffer(AudioFrame *p_buffer, int32_t p_frames) override {
-	    if (playback == nullptr)
+	void reset() override {
+		if (playback.is_valid()) {
+			playback->start();
+		}
+	}
+
+	int32_t mix_output_into_buffer(AudioFrame *p_buffer, int32_t p_frames) override {
+	    if (!playback.is_valid())
 	    {
-	        return false;
+	        return 0;
 	    }
 	    PROFILE_FUNCTION();
 
 	    begin_volume_block(p_frames);
-	    // Skip only when fully silent: both the target and the ramp start value
-	    // must be ~0, otherwise a fade-down still needs to be rendered.
 	    if (get_volume() <= 0.0001f && volume_at(0) <= 0.0001f)
 	    {
 	        end_volume_block(p_frames);
-	        return false;
+	        return 0;
 	    }
 	    float pitch = get_pitch();
 	    auto mixed_input = playback->mix_audio(pitch, p_frames);
@@ -908,17 +1008,20 @@ public:
 	        p_buffer[i].right += mixed_input[i].y * volume_at(i);
 	    }
 	    end_volume_block(p_frames);
-        return num_frames_mixed == p_frames;
+        return num_frames_mixed;
 	}
 };
 
 StreamWeaverProducerRuntimeInstanceBase *StreamWeaverStreamLooping::create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) {
 	auto* instance = memnew(ParameterizedOutputLoopingRuntimeInstance);
     initialize_runtime_instance_base( instance, from_playback );
-    instance->playback = input_stream->GetAudioStream()->instantiate_playback();
-    if (instance->playback != nullptr)
+    if (input_stream.is_valid() && input_stream->GetAudioStream().is_valid())
     {
-        instance->playback->start();
+        instance->playback = input_stream->GetAudioStream()->instantiate_playback();
+        if (instance->playback.is_valid())
+        {
+            instance->playback->start();
+        }
     }
 	return instance;
 }
@@ -1017,7 +1120,7 @@ public:
 		// we just sweep forever, no triggering neccessary
 	}
 
-	bool mix_output_into_buffer(AudioFrame *p_buffer, int32_t p_frames) override {
+	int32_t mix_output_into_buffer(AudioFrame *p_buffer, int32_t p_frames) override {
 		PROFILE_FUNCTION();
 		for (int frame_index = 0; frame_index < p_frames; frame_index++) {
 			float current_volume = 1.0f;
@@ -1049,7 +1152,7 @@ public:
 			}
 		}
 
-		return true;
+		return p_frames;
 	}
 
 	ActiveGrainData spawn_new_grain() {
@@ -1090,15 +1193,24 @@ public:
 
 StreamWeaverProducerRuntimeInstanceBase* StreamWeaverStreamGranularLinearSweep::create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) {
     PROFILE_FUNCTION();
+    if (input_stream.is_null() || input_stream->GetAudioStream().is_null() || sweeping_parameter.is_null()) {
+        return nullptr;
+    }
     auto* instance = memnew(StreamWeaverOutputGranularLinearSweepRuntime);
     initialize_runtime_instance_base( instance, from_playback );
     instance->sweeping_parameter = from_playback->get_parameter_runtime_instance(sweeping_parameter);
     auto playback = input_stream->GetAudioStream()->instantiate_playback();
-    if (playback != nullptr)
+    if (playback.is_valid())
     {
         playback->start();
         int num_samples = input_stream->GetAudioStream()->get_length() * AudioServer::get_singleton()->get_mix_rate();
-        instance->grain_buffer = playback->mix_audio(1.0f, num_samples);
+        if (num_samples > 0) {
+            instance->grain_buffer = playback->mix_audio(1.0f, num_samples);
+        }
+    }
+    if (instance->grain_buffer.is_empty()) {
+        memdelete(instance);
+        return nullptr;
     }
     instance->min_parameter_value = min_parameter_value;
     instance->max_parameter_value = max_parameter_value;
@@ -1176,6 +1288,10 @@ void StreamWeaverStreamGranularDatabase::_bind_methods() {
     ClassDB::bind_method(D_METHOD("set_preferred_match_bias", "bias"), &StreamWeaverStreamGranularDatabase::SetPreferredMatchBias);
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "preferred_match_bias", PROPERTY_HINT_RANGE, "0,4,0.01"),
         "set_preferred_match_bias", "get_preferred_match_bias");
+    ClassDB::bind_method(D_METHOD("get_phase_alignment_ms"), &StreamWeaverStreamGranularDatabase::GetPhaseAlignmentMs);
+    ClassDB::bind_method(D_METHOD("set_phase_alignment_ms", "ms"), &StreamWeaverStreamGranularDatabase::SetPhaseAlignmentMs);
+    ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "phase_alignment_ms", PROPERTY_HINT_RANGE, "0,20,0.1"),
+        "set_phase_alignment_ms", "get_phase_alignment_ms");
 }
 
 class StreamWeaverOutputGranularDatabaseRuntime : public StreamWeaverProducerRuntimeInstanceBase {
@@ -1212,6 +1328,8 @@ public:
     float random_walk_step = 0.85f;
     float random_walk_damping = 0.6f;
     float preferred_match_bias = 0.75f;
+    float phase_alignment_ms = 0.0f;
+    std::vector<float> correlation_scratch;
     int last_played[MAX_NO_REPEAT] = {};
 
     bool is_repeat(int idx) const {
@@ -1445,7 +1563,8 @@ public:
         int descending_size = half_window;
         int total_window_size = ascending_size + descending_size;
 
-        int input_start = entry.center_sample - ascending_size;
+        int nominal_input_start = entry.center_sample - ascending_size;
+        int input_start = nominal_input_start;
         int pcm_size = db->pcm_sample_count();
 
         // Place the grain so its ascending half starts at the previous grain's
@@ -1457,16 +1576,76 @@ public:
         } else {
             output_start = std::max(last_grain_output_center, overlap_read_index);
         }
+
+        int output_end = output_start + total_window_size;
+        if (output_end <= 0) return;
+        ensure_overlap_capacity(output_end);
+
+        if (phase_alignment_ms > 0.0f && last_grain_output_center >= 0 && ascending_size > 0 &&
+            output_start + ascending_size <= static_cast<int>(overlap_buffer.size())) {
+            int max_shift = static_cast<int>(std::round(phase_alignment_ms * 0.001f * db->get_sample_rate()));
+            max_shift = std::min(max_shift, ascending_size);
+            int min_shift = std::max(-max_shift, -nominal_input_start);
+            int clamped_max_shift = std::min(max_shift, pcm_size - total_window_size - nominal_input_start);
+
+            if (min_shift <= clamped_max_shift) {
+                const float* target = overlap_buffer.data() + output_start;
+                float target_energy = 0.0f;
+                for (int i = 0; i < ascending_size; ++i) {
+                    target_energy += target[i] * target[i];
+                }
+
+                if (target_energy > 1e-7f) {
+                    int cand_samples = (clamped_max_shift - min_shift) + ascending_size;
+                    correlation_scratch.resize(cand_samples);
+                    int cand_base = nominal_input_start + min_shift;
+                    for (int i = 0; i < cand_samples; ++i) {
+                        correlation_scratch[i] = db->decode_sample(cand_base + i);
+                    }
+
+                    float cand_energy = 0.0f;
+                    for (int i = 0; i < ascending_size; ++i) {
+                        cand_energy += correlation_scratch[i] * correlation_scratch[i];
+                    }
+
+                    int best_shift = 0;
+                    float best_corr = -1e9f;
+                    int num_shifts = clamped_max_shift - min_shift + 1;
+
+                    for (int s = 0; s < num_shifts; ++s) {
+                        if (s > 0) {
+                            cand_energy += correlation_scratch[s + ascending_size - 1] * correlation_scratch[s + ascending_size - 1]
+                                         - correlation_scratch[s - 1] * correlation_scratch[s - 1];
+                            if (cand_energy < 0.0f) cand_energy = 0.0f;
+                        }
+
+                        const float* cand_ptr = correlation_scratch.data() + s;
+                        float dot = 0.0f;
+                        for (int i = 0; i < ascending_size; ++i) {
+                            dot += target[i] * cand_ptr[i];
+                        }
+
+                        float norm = std::sqrt(cand_energy * target_energy);
+                        float corr = (norm > 1e-7f) ? (dot / norm) : 0.0f;
+                        if (corr > best_corr) {
+                            best_corr = corr;
+                            best_shift = min_shift + s;
+                        }
+                    }
+
+                    if (best_corr > 0.0f) {
+                        input_start = nominal_input_start + best_shift;
+                    }
+                }
+            }
+        }
+
         // The peak of the asymmetric window (ascending→descending boundary) is
         // the "center" tracked for the next grain's placement.
         int output_center = output_start + ascending_size;
         last_grain_output_center = output_center;
         last_grain_half_window = descending_size;
 
-        int output_end = output_start + total_window_size;
-
-        if (output_end <= 0) return;
-        ensure_overlap_capacity(output_end);
 
         for (int i = 0; i < total_window_size; ++i)
         {
@@ -1495,9 +1674,59 @@ public:
         // Continuous output, no triggering needed
     }
 
-    bool mix_output_into_buffer(AudioFrame* p_buffer, int32_t p_frames) override {
+    void preseed_overlap_buffer() {
+        if (!db || db->get_grain_count() == 0) return;
+        const PackedFloat32Array& params = get_smoothed_search_params();
+        float target_f0_hint = get_target_f0();
+        int unit_index = select_new_grain(params, target_f0_hint, -1);
+        if (unit_index < 0) return;
+
+        const auto& entry = db->get_grain_entry(unit_index);
+        if (entry.fundamental_hz <= 0.0f) return;
+
+        float window_f0 = (smoothed_target_f0 > 0.0f) ? smoothed_target_f0 : entry.fundamental_hz;
+        int period_samples = std::max(1, static_cast<int>(std::round(db->get_sample_rate() / window_f0)));
+        int half_window = std::max(1, period_samples);
+        int pcm_size = db->pcm_sample_count();
+
+        ensure_overlap_capacity(overlap_read_index + half_window * 4);
+
+        for (int i = 0; i < half_window; ++i) {
+            int src_index = entry.center_sample + i;
+            int dst_index = overlap_read_index + i;
+            if (dst_index < 0 || dst_index >= static_cast<int>(overlap_buffer.size())) continue;
+            float sample = 0.0f;
+            if (src_index >= 0 && src_index < pcm_size) {
+                sample = db->decode_sample(src_index);
+            }
+            float phase = static_cast<float>(i) / static_cast<float>(half_window);
+            float window = 0.5f * (1.0f + std::cos(Math_PI * phase));
+            overlap_buffer[dst_index] += sample * window;
+        }
+
+        last_grain_output_center = overlap_read_index;
+        last_grain_half_window = half_window;
+
+        trigger_unit();
+    }
+
+    void reset() override {
+        overlap_read_index = 0;
+        overlap_buffer.assign(4096, 0.0f);
+        synthesis_phase = 0.0f;
+        smoothed_target_f0 = 0.0f;
+        last_grain_output_center = -1;
+        last_grain_half_window = -1;
+        last_selected_unit = -1;
+        for (int i = 0; i < MAX_NO_REPEAT; ++i) {
+            last_played[i] = -1;
+        }
+        preseed_overlap_buffer();
+    }
+
+    int32_t mix_output_into_buffer(AudioFrame* p_buffer, int32_t p_frames) override {
         PROFILE_FUNCTION();
-        if (!db || db->get_grain_count() == 0) return false;
+        if (!db || db->get_grain_count() == 0) return 0;
 
         begin_volume_block(p_frames);
 
@@ -1560,7 +1789,7 @@ public:
             if (last_grain_output_center >= 0)
                 last_grain_output_center -= read_pos;
         }
-        return true;
+        return p_frames;
     }
 };
 
@@ -1581,6 +1810,7 @@ StreamWeaverProducerRuntimeInstanceBase* StreamWeaverStreamGranularDatabase::cre
     instance->random_walk_step = std::max(0.0f, random_walk_step);
     instance->random_walk_damping = Math::clamp(random_walk_damping, 0.0f, 1.0f);
     instance->preferred_match_bias = std::max(0.0f, preferred_match_bias);
+    instance->phase_alignment_ms = std::max(0.0f, phase_alignment_ms);
 
     int num_axes = grains_database->get_num_axes();
     instance->axis_param_instances.resize(num_axes);
@@ -1600,11 +1830,7 @@ StreamWeaverProducerRuntimeInstanceBase* StreamWeaverStreamGranularDatabase::cre
     instance->rng.instantiate();
     instance->rng->set_seed(random_seed);
 
-    for (int i = 0; i < StreamWeaverOutputGranularDatabaseRuntime::MAX_NO_REPEAT; ++i) {
-        instance->last_played[i] = -1;
-    }
-    instance->overlap_buffer.resize(4096, 0.0f);
-    instance->trigger_unit();
+    instance->reset();
 
     return instance;
 }
@@ -1644,14 +1870,21 @@ public:
 	float ramp_step = 0.0f;
 	bool ramp_initialized = false;
 
-	bool process_audio(AudioFrame *p_dst_buffer, int32_t p_frames, uint32_t p_generation) override {
+	void reset() override {
+		if (runtime_a) runtime_a->reset();
+		if (runtime_b) runtime_b->reset();
+		ramp_initialized = false;
+	}
+
+	int32_t process_audio(AudioFrame *p_dst_buffer, int32_t p_frames, uint32_t p_generation) override {
 		bool has_a = false, has_b = false;
-		const AudioFrame *src_a = runtime_a ? runtime_a->pull_audio(p_frames, p_generation, has_a) : nullptr;
-		const AudioFrame *src_b = runtime_b ? runtime_b->pull_audio(p_frames, p_generation, has_b) : nullptr;
+		int32_t frames_a = 0, frames_b = 0;
+		const AudioFrame *src_a = runtime_a ? runtime_a->pull_audio(p_frames, p_generation, has_a, &frames_a) : nullptr;
+		const AudioFrame *src_b = runtime_b ? runtime_b->pull_audio(p_frames, p_generation, has_b, &frames_b) : nullptr;
 
 		if (!has_a && !has_b) {
 			memset(p_dst_buffer, 0, sizeof(AudioFrame) * p_frames);
-			return false;
+			return 0;
 		}
 
 		float target_mix = mix_param ? Math::clamp(mix_param->get_value(), 0.0f, 1.0f) : Math::clamp(mix_value, 0.0f, 1.0f);
@@ -1661,6 +1894,7 @@ public:
 		}
 		ramp_step = (target_mix - ramp_value) / float(p_frames > 0 ? p_frames : 1);
 
+		int32_t max_frames = Math::max(has_a ? frames_a : 0, has_b ? frames_b : 0);
 		for (int32_t i = 0; i < p_frames; ++i) {
 			float t = Math::clamp(ramp_value + ramp_step * float(i), 0.0f, 1.0f);
 			float ga, gb;
@@ -1672,11 +1906,11 @@ public:
 				gb = t;
 			}
 			float l = 0.0f, r = 0.0f;
-			if (has_a && src_a) {
+			if (has_a && src_a && i < frames_a) {
 				l += src_a[i].left * ga;
 				r += src_a[i].right * ga;
 			}
-			if (has_b && src_b) {
+			if (has_b && src_b && i < frames_b) {
 				l += src_b[i].left * gb;
 				r += src_b[i].right * gb;
 			}
@@ -1684,7 +1918,7 @@ public:
 			p_dst_buffer[i].right = r;
 		}
 		ramp_value += ramp_step * float(p_frames);
-		return true;
+		return max_frames;
 	}
 };
 
@@ -1705,7 +1939,430 @@ StreamWeaverStreamRuntimeInstance* StreamWeaverStreamMixer2Way::create_runtime_i
 }
 
 void StreamWeaverStreamMixer2Way::release_runtime_instance(StreamWeaverStreamRuntimeInstance* instance) {
-	memdelete(dynamic_cast<StreamWeaverStreamMixer2WayRuntimeInstance*>(instance));
+	if (instance) {
+		memdelete(instance);
+	}
+}
+
+// -------------------- StreamWeaverStream3Slice --------------------
+void StreamWeaverStream3Slice::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("get_intro_stream"), &StreamWeaverStream3Slice::GetIntroStream);
+	ClassDB::bind_method(D_METHOD("set_intro_stream", "stream"), &StreamWeaverStream3Slice::SetIntroStream);
+	ClassDB::bind_method(D_METHOD("get_loop_stream"), &StreamWeaverStream3Slice::GetLoopStream);
+	ClassDB::bind_method(D_METHOD("set_loop_stream", "stream"), &StreamWeaverStream3Slice::SetLoopStream);
+	ClassDB::bind_method(D_METHOD("get_outro_stream"), &StreamWeaverStream3Slice::GetOutroStream);
+	ClassDB::bind_method(D_METHOD("set_outro_stream", "stream"), &StreamWeaverStream3Slice::SetOutroStream);
+
+	ClassDB::bind_method(D_METHOD("get_start_trigger"), &StreamWeaverStream3Slice::GetStartTrigger);
+	ClassDB::bind_method(D_METHOD("set_start_trigger", "trigger"), &StreamWeaverStream3Slice::SetStartTrigger);
+	ClassDB::bind_method(D_METHOD("get_stop_trigger"), &StreamWeaverStream3Slice::GetStopTrigger);
+	ClassDB::bind_method(D_METHOD("set_stop_trigger", "trigger"), &StreamWeaverStream3Slice::SetStopTrigger);
+
+	ClassDB::bind_method(D_METHOD("get_transition_mode"), &StreamWeaverStream3Slice::GetTransitionMode);
+	ClassDB::bind_method(D_METHOD("set_transition_mode", "mode"), &StreamWeaverStream3Slice::SetTransitionMode);
+	ClassDB::bind_method(D_METHOD("get_stop_mode"), &StreamWeaverStream3Slice::GetStopMode);
+	ClassDB::bind_method(D_METHOD("set_stop_mode", "mode"), &StreamWeaverStream3Slice::SetStopMode);
+
+	ClassDB::bind_method(D_METHOD("get_crossfade_time"), &StreamWeaverStream3Slice::GetCrossfadeTime);
+	ClassDB::bind_method(D_METHOD("set_crossfade_time", "time"), &StreamWeaverStream3Slice::SetCrossfadeTime);
+
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "intro_stream", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverStream"), "set_intro_stream", "get_intro_stream");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "loop_stream", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverStream"), "set_loop_stream", "get_loop_stream");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "outro_stream", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverStream"), "set_outro_stream", "get_outro_stream");
+
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "start_trigger", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverTrigger"), "set_start_trigger", "get_start_trigger");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "stop_trigger", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverTrigger"), "set_stop_trigger", "get_stop_trigger");
+
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "transition_mode", PROPERTY_HINT_ENUM, "Sample Perfect,Crossfade"), "set_transition_mode", "get_transition_mode");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "stop_mode", PROPERTY_HINT_ENUM, "Immediate,Finish Intro"), "set_stop_mode", "get_stop_mode");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "crossfade_time"), "set_crossfade_time", "get_crossfade_time");
+
+	BIND_ENUM_CONSTANT(TRANSITION_SAMPLE_PERFECT);
+	BIND_ENUM_CONSTANT(TRANSITION_CROSSFADE);
+	BIND_ENUM_CONSTANT(STOP_IMMEDIATE);
+	BIND_ENUM_CONSTANT(STOP_FINISH_INTRO);
+}
+
+class StreamWeaverStream3SliceRuntimeInstance : public StreamWeaverStreamRuntimeInstance {
+public:
+	enum State {
+		STATE_IDLE = 0,
+		STATE_INTRO,
+		STATE_LOOP,
+		STATE_CROSSFADE,
+		STATE_OUTRO,
+	};
+
+	StreamWeaverStreamRuntimeInstance* runtime_intro = nullptr;
+	StreamWeaverStreamRuntimeInstance* runtime_loop = nullptr;
+	StreamWeaverStreamRuntimeInstance* runtime_outro = nullptr;
+
+	StreamWeaverStream3Slice::TransitionMode transition_mode = StreamWeaverStream3Slice::TRANSITION_SAMPLE_PERFECT;
+	StreamWeaverStream3Slice::StopMode stop_mode = StreamWeaverStream3Slice::STOP_IMMEDIATE;
+	float crossfade_time = 0.05f;
+
+	State state = STATE_IDLE;
+	bool stop_pending_flag = false;
+
+	StreamWeaverStreamRuntimeInstance* crossfade_from = nullptr;
+	StreamWeaverStreamRuntimeInstance* crossfade_to = nullptr;
+	State crossfade_target_state = STATE_IDLE;
+	int32_t crossfade_pos = 0;
+	int32_t crossfade_total_frames = 1;
+
+	AudioFrame last_written_frame{ 0.0f, 0.0f };
+	bool has_written_frame = false;
+	AudioFrame declick_offset{ 0.0f, 0.0f };
+	int32_t declick_remaining = 0;
+	bool declick_pending = false;
+	static constexpr int32_t DECLICK_FRAMES = 64;
+
+	void apply_declick_to_out(AudioFrame* out, int32_t count) {
+		if (count <= 0) return;
+		if (declick_pending) {
+			declick_offset.left = out[0].left - last_written_frame.left;
+			declick_offset.right = out[0].right - last_written_frame.right;
+			declick_remaining = DECLICK_FRAMES;
+			declick_pending = false;
+		}
+		if (declick_remaining > 0) {
+			int32_t n = Math::min(count, declick_remaining);
+			for (int32_t i = 0; i < n; ++i) {
+				float factor = float(declick_remaining - i) / float(DECLICK_FRAMES);
+				out[i].left -= declick_offset.left * factor;
+				out[i].right -= declick_offset.right * factor;
+			}
+			declick_remaining -= n;
+		}
+		last_written_frame = out[count - 1];
+		has_written_frame = true;
+	}
+
+	std::atomic<bool> start_triggered{ false };
+	std::atomic<bool> stop_triggered{ false };
+	uint32_t internal_sub_generation = 0;
+
+	inline uint32_t next_generation(uint32_t p_generation) {
+		return (p_generation << 8) | (++internal_sub_generation & 0xFF);
+	}
+	struct TriggerReceiver : public StreamWeaverRuntimeTriggerableInterface {
+		StreamWeaverStream3SliceRuntimeInstance* parent = nullptr;
+		bool is_stop = false;
+		void trigger() override {
+			if (is_stop) {
+				parent->stop_triggered.store(true, std::memory_order_release);
+			} else {
+				parent->start_triggered.store(true, std::memory_order_release);
+			}
+		}
+	};
+	TriggerReceiver start_receiver;
+	TriggerReceiver stop_receiver;
+
+	void trigger() override {
+		start_triggered.store(true, std::memory_order_release);
+	}
+
+	void reset() override {
+		state = STATE_IDLE;
+		stop_pending_flag = false;
+		crossfade_pos = 0;
+		crossfade_from = nullptr;
+		crossfade_to = nullptr;
+		has_written_frame = false;
+		declick_remaining = 0;
+		declick_pending = false;
+		start_triggered.store(false, std::memory_order_relaxed);
+		stop_triggered.store(false, std::memory_order_relaxed);
+	}
+
+	StreamWeaverStreamRuntimeInstance* active_runtime() const {
+		switch (state) {
+			case STATE_INTRO: return runtime_intro;
+			case STATE_LOOP: return runtime_loop;
+			case STATE_OUTRO: return runtime_outro;
+			case STATE_CROSSFADE: return crossfade_to ? crossfade_to : crossfade_from;
+			default: return nullptr;
+		}
+	}
+
+	void start_crossfade(StreamWeaverStreamRuntimeInstance* from, StreamWeaverStreamRuntimeInstance* to, State target_state, float override_fade_time = -1.0f) {
+		if (!from && !to) {
+			state = target_state;
+			crossfade_from = nullptr;
+			crossfade_to = nullptr;
+			return;
+		}
+		float rate = 44100.0f;
+		if (AudioServer::get_singleton()) {
+			rate = AudioServer::get_singleton()->get_mix_rate();
+		}
+		float dur = override_fade_time >= 0.0f ? override_fade_time : crossfade_time;
+		crossfade_total_frames = Math::max(1, static_cast<int32_t>(dur * rate));
+		crossfade_pos = 0;
+		crossfade_from = from;
+		crossfade_to = to;
+		crossfade_target_state = target_state;
+		state = STATE_CROSSFADE;
+	}
+
+	void begin_stop_transition() {
+		StreamWeaverStreamRuntimeInstance* active = active_runtime();
+		if (runtime_outro) {
+			runtime_outro->reset();
+			start_crossfade(active, runtime_outro, STATE_OUTRO);
+		} else {
+			start_crossfade(active, nullptr, STATE_IDLE);
+		}
+	}
+
+	void on_intro_finished() {
+		if (stop_pending_flag) {
+			stop_pending_flag = false;
+			if (runtime_outro) {
+				runtime_outro->reset();
+				state = STATE_OUTRO;
+				if (has_written_frame) declick_pending = true;
+			} else {
+				state = STATE_IDLE;
+			}
+		} else if (runtime_loop) {
+			runtime_loop->reset();
+			state = STATE_LOOP;
+			if (has_written_frame) declick_pending = true;
+		} else {
+			state = STATE_IDLE;
+		}
+	}
+
+	void handle_triggers() {
+		if (start_triggered.exchange(false, std::memory_order_acq_rel)) {
+			if (state == STATE_IDLE) {
+				stop_pending_flag = false;
+				if (runtime_intro) {
+					runtime_intro->reset();
+					state = STATE_INTRO;
+				} else if (runtime_loop) {
+					runtime_loop->reset();
+					state = STATE_LOOP;
+				} else {
+					state = STATE_IDLE;
+				}
+			} else if (state == STATE_INTRO) {
+				if (stop_pending_flag) {
+					stop_pending_flag = false;
+				}
+			} else if (state == STATE_LOOP) {
+			} else if (state == STATE_CROSSFADE) {
+				if (crossfade_target_state == STATE_LOOP || crossfade_target_state == STATE_INTRO) {
+				} else {
+					StreamWeaverStreamRuntimeInstance* target = runtime_intro ? runtime_intro : runtime_loop;
+					State target_state = runtime_intro ? STATE_INTRO : STATE_LOOP;
+					if (target) {
+						target->reset();
+						start_crossfade(active_runtime(), target, target_state, 0.02f);
+					}
+				}
+			} else if (state == STATE_OUTRO) {
+				StreamWeaverStreamRuntimeInstance* target = runtime_intro ? runtime_intro : runtime_loop;
+				State target_state = runtime_intro ? STATE_INTRO : STATE_LOOP;
+				if (target) {
+					target->reset();
+					start_crossfade(runtime_outro, target, target_state, 0.02f);
+				}
+			}
+		}
+
+		if (stop_triggered.exchange(false, std::memory_order_acq_rel)) {
+			if (state == STATE_INTRO) {
+				if (stop_mode == StreamWeaverStream3Slice::STOP_FINISH_INTRO) {
+					stop_pending_flag = true;
+				} else {
+					begin_stop_transition();
+				}
+			} else if (state == STATE_LOOP || (state == STATE_CROSSFADE && (crossfade_target_state == STATE_LOOP || crossfade_target_state == STATE_INTRO))) {
+				begin_stop_transition();
+			}
+		}
+	}
+
+	int32_t process_audio(AudioFrame *p_dst_buffer, int32_t p_frames, uint32_t p_generation) override {
+		handle_triggers();
+
+		if (state == STATE_IDLE) {
+			memset(p_dst_buffer, 0, sizeof(AudioFrame) * p_frames);
+			return 0;
+		}
+
+		int32_t frames_written = 0;
+		while (frames_written < p_frames && state != STATE_IDLE) {
+			int32_t chunk = p_frames - frames_written;
+			AudioFrame *out = p_dst_buffer + frames_written;
+
+			if (state == STATE_INTRO) {
+				if (!runtime_intro) {
+					on_intro_finished();
+					continue;
+				}
+				if (transition_mode == StreamWeaverStream3Slice::TRANSITION_CROSSFADE) {
+					float rem_s = runtime_intro->get_remaining_playback_time_s();
+					if (rem_s >= 0.0f && rem_s <= crossfade_time) {
+						if (stop_pending_flag) {
+							stop_pending_flag = false;
+							if (runtime_outro) {
+								runtime_outro->reset();
+								start_crossfade(runtime_intro, runtime_outro, STATE_OUTRO);
+							} else {
+								start_crossfade(runtime_intro, nullptr, STATE_IDLE);
+							}
+						} else if (runtime_loop) {
+							runtime_loop->reset();
+							start_crossfade(runtime_intro, runtime_loop, STATE_LOOP);
+						} else {
+							start_crossfade(runtime_intro, nullptr, STATE_IDLE);
+						}
+						continue;
+					}
+				}
+				bool has_audio = false;
+				int32_t produced = 0;
+				const AudioFrame *src = runtime_intro->pull_audio(chunk, next_generation(p_generation), has_audio, &produced);
+				int32_t to_write = Math::min(chunk, produced);
+				if (has_audio && src && to_write > 0) {
+					for (int32_t i = 0; i < to_write; ++i) {
+						out[i] = src[i];
+					}
+					apply_declick_to_out(out, to_write);
+					frames_written += to_write;
+				}
+				if (produced < chunk) {
+					on_intro_finished();
+				}
+			} else if (state == STATE_LOOP) {
+				if (!runtime_loop) {
+					state = STATE_IDLE;
+					break;
+				}
+				bool has_audio = false;
+				int32_t produced = 0;
+				const AudioFrame *src = runtime_loop->pull_audio(chunk, next_generation(p_generation), has_audio, &produced);
+				int32_t to_write = Math::min(chunk, produced);
+				if (has_audio && src && to_write > 0) {
+					for (int32_t i = 0; i < to_write; ++i) {
+						out[i] = src[i];
+					}
+					apply_declick_to_out(out, to_write);
+					frames_written += to_write;
+				}
+				if (produced < chunk) {
+					state = STATE_IDLE;
+				}
+			} else if (state == STATE_OUTRO) {
+				if (!runtime_outro) {
+					state = STATE_IDLE;
+					break;
+				}
+				bool has_audio = false;
+				int32_t produced = 0;
+				const AudioFrame *src = runtime_outro->pull_audio(chunk, next_generation(p_generation), has_audio, &produced);
+				int32_t to_write = Math::min(chunk, produced);
+				if (has_audio && src && to_write > 0) {
+					for (int32_t i = 0; i < to_write; ++i) {
+						out[i] = src[i];
+					}
+					apply_declick_to_out(out, to_write);
+					frames_written += to_write;
+				}
+				if (produced < chunk) {
+					state = STATE_IDLE;
+				}
+			} else if (state == STATE_CROSSFADE) {
+				int32_t remaining_fade = crossfade_total_frames - crossfade_pos;
+				int32_t fade_chunk = Math::min(chunk, remaining_fade);
+
+				bool has_from = false, has_to = false;
+				int32_t produced_from = 0, produced_to = 0;
+				uint32_t gen_from = next_generation(p_generation);
+				uint32_t gen_to = next_generation(p_generation);
+				const AudioFrame *src_from = crossfade_from ? crossfade_from->pull_audio(fade_chunk, gen_from, has_from, &produced_from) : nullptr;
+				const AudioFrame *src_to = crossfade_to ? crossfade_to->pull_audio(fade_chunk, gen_to, has_to, &produced_to) : nullptr;
+
+				for (int32_t i = 0; i < fade_chunk; ++i) {
+					float t = Math::clamp(float(crossfade_pos + i) / float(crossfade_total_frames), 0.0f, 1.0f);
+					float g_from = Math::cos(t * Math_PI * 0.5f);
+					float g_to = Math::sin(t * Math_PI * 0.5f);
+
+					float l = 0.0f, r = 0.0f;
+					if (has_from && src_from && i < produced_from) {
+						l += src_from[i].left * g_from;
+						r += src_from[i].right * g_from;
+					}
+					if (has_to && src_to && i < produced_to) {
+						l += src_to[i].left * g_to;
+						r += src_to[i].right * g_to;
+					}
+					out[i].left = l;
+					out[i].right = r;
+				}
+				apply_declick_to_out(out, fade_chunk);
+				crossfade_pos += fade_chunk;
+				frames_written += fade_chunk;
+
+				if (crossfade_pos >= crossfade_total_frames) {
+					state = crossfade_target_state;
+					crossfade_from = nullptr;
+					crossfade_to = nullptr;
+				}
+			}
+		}
+
+		if (frames_written < p_frames) {
+			memset(p_dst_buffer + frames_written, 0, sizeof(AudioFrame) * (p_frames - frames_written));
+		}
+		return frames_written;
+	}
+};
+
+StreamWeaverStreamRuntimeInstance* StreamWeaverStream3Slice::create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) {
+	auto* instance = memnew(StreamWeaverStream3SliceRuntimeInstance);
+	instance->start_receiver.parent = instance;
+	instance->start_receiver.is_stop = false;
+	instance->stop_receiver.parent = instance;
+	instance->stop_receiver.is_stop = true;
+
+	if (intro_stream.is_valid()) {
+		instance->runtime_intro = from_playback->get_stream_runtime_instance(intro_stream);
+	}
+	if (loop_stream.is_valid()) {
+		instance->runtime_loop = from_playback->get_stream_runtime_instance(loop_stream);
+	}
+	if (outro_stream.is_valid()) {
+		instance->runtime_outro = from_playback->get_stream_runtime_instance(outro_stream);
+	}
+
+	if (start_trigger.is_valid()) {
+		auto* trig = from_playback->get_trigger_runtime_instance(start_trigger);
+		if (trig) {
+			trig->add_triggerable(&instance->start_receiver);
+		}
+	}
+	if (stop_trigger.is_valid()) {
+		auto* trig = from_playback->get_trigger_runtime_instance(stop_trigger);
+		if (trig) {
+			trig->add_triggerable(&instance->stop_receiver);
+		}
+	}
+
+	instance->transition_mode = transition_mode;
+	instance->stop_mode = stop_mode;
+	instance->crossfade_time = crossfade_time;
+	return instance;
+}
+
+void StreamWeaverStream3Slice::release_runtime_instance(StreamWeaverStreamRuntimeInstance* instance) {
+	if (instance) {
+		memdelete(instance);
+	}
 }
 
 // -------------------- StreamWeaverAudioStream --------------------
@@ -1756,26 +2413,38 @@ StreamWeaverAudioStreamPlayback::~StreamWeaverAudioStreamPlayback()
 {
     for (auto& [stream, stream_instance] : all_streams)
     {
-        stream->release_runtime_instance( stream_instance );
+        if (stream.is_valid() && stream_instance) {
+            stream->release_runtime_instance( stream_instance );
+        }
     }
     for (auto& [parameter, parameter_instance] : all_parameters)
     {
-        parameter->release_runtime_instance( parameter_instance );
+        if (parameter.is_valid() && parameter_instance) {
+            parameter->release_runtime_instance( parameter_instance );
+        }
     }
     for (auto& [trigger, trigger_instance] : all_triggers)
     {
-        trigger->release_runtime_instance( trigger_instance );
+        if (trigger.is_valid() && trigger_instance) {
+            trigger->release_runtime_instance( trigger_instance );
+        }
     }
 }
 
 StreamWeaverParameterRuntimeInstance *StreamWeaverAudioStreamPlayback::
     get_parameter_runtime_instance( Ref<StreamWeaverParameter> parameter )
 {
+    if (parameter.is_null()) {
+        return nullptr;
+    }
     if (auto parameter_instance = all_parameters.getptr( parameter ))
     {
         return *parameter_instance;
     }
     auto parameter_instance = parameter->create_runtime_instance(this);
+    if (!parameter_instance) {
+        return nullptr;
+    }
     all_parameters.insert( parameter, parameter_instance );
     if ( auto parameter_as_input = cast_to<StreamWeaverParameterInput>( parameter.ptr() ) )
     {
@@ -1787,11 +2456,17 @@ StreamWeaverParameterRuntimeInstance *StreamWeaverAudioStreamPlayback::
 StreamWeaverTriggerRuntimeInstance *StreamWeaverAudioStreamPlayback::get_trigger_runtime_instance(
     Ref<StreamWeaverTrigger> trigger )
 {
+    if (trigger.is_null()) {
+        return nullptr;
+    }
     if (auto trigger_instance = all_triggers.getptr( trigger ))
     {
         return *trigger_instance;
     }
     auto trigger_instance = trigger->create_runtime_instance(this);
+    if (!trigger_instance) {
+        return nullptr;
+    }
     all_triggers.insert( trigger, trigger_instance );
     if ( auto trigger_as_input = cast_to<StreamWeaverTriggerInput>( trigger.ptr() ) )
     {
@@ -1885,6 +2560,11 @@ void StreamWeaverAudioStreamPlayback::trigger(StringName trigger) {
 
 void StreamWeaverAudioStreamPlayback::_start(double p_from_pos) {
 	active = true;
+    for (auto stream_runtime : master_stream_runtimes) {
+        if (stream_runtime) {
+            stream_runtime->reset();
+        }
+    }
 }
 
 void StreamWeaverAudioStreamPlayback::_stop() {

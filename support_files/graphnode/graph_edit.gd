@@ -9,6 +9,7 @@ var master_output_scene := preload("res://addons/StreamWeaver/graphnode/master_o
 var node_types := {
 	"Input Stream": preload("res://addons/StreamWeaver/graphnode/input_stream.tscn"),
 	"Stream Mixer 2-Way": preload("res://addons/StreamWeaver/graphnode/stream_mixer_2way.tscn"),
+	"Stream 3-Slice": preload("res://addons/StreamWeaver/graphnode/stream_3slice.tscn"),
 	"Input Parameter": preload("res://addons/StreamWeaver/graphnode/input_parameter.tscn"),
 	"Input Trigger": preload("res://addons/StreamWeaver/graphnode/input_trigger.tscn"),
 	"Conditional Parameter Trigger": preload("res://addons/StreamWeaver/graphnode/conditional_parameter_trigger.tscn"),
@@ -31,6 +32,8 @@ func _create_resource_for_node_type(node_type_name: String) -> Resource:
 			return InputStreamGraphNode.create_new_resource(current_resource)
 		"Stream Mixer 2-Way":
 			return StreamMixer2WayGraphNode.create_new_resource(current_resource)
+		"Stream 3-Slice":
+			return Stream3SliceGraphNode.create_new_resource(current_resource)
 		"Input Parameter":
 			return InputParameterGraphNode.create_new_resource(current_resource)
 		"Input Trigger":
@@ -66,6 +69,7 @@ func _create_resource_for_node_type(node_type_name: String) -> Resource:
 func _get_node_type_for_resource(res: Resource) -> String:
 	if res is StreamWeaverInputStream: return "Input Stream"
 	if res is StreamWeaverStreamMixer2Way: return "Stream Mixer 2-Way"
+	if res is StreamWeaverStream3Slice: return "Stream 3-Slice"
 	if res is StreamWeaverParameterInput: return "Input Parameter"
 	if res is StreamWeaverTriggerInput: return "Input Trigger"
 	if res is StreamWeaverTriggerConditionalParameter: return "Conditional Parameter Trigger"
@@ -97,32 +101,23 @@ var current_resource: StreamWeaverAudioStream
 
 const DELETE_NODE_ID = 1000
 
+func _ensure_popup_menu() -> PopupMenu:
+	if popup_menu == null or not is_instance_valid(popup_menu):
+		popup_menu = PopupMenu.new()
+		popup_menu.id_pressed.connect(_on_popup_id_pressed)
+		add_child(popup_menu)
+	return popup_menu
+
 func _ready():
-	# Create context menu
-	popup_menu = PopupMenu.new()
-	get_tree().root.add_child(popup_menu)
-
-	var id := 0
-	for name in node_types.keys():
-		popup_menu.add_item(name, id)
-		id += 1
-
-	popup_menu.id_pressed.connect(_on_popup_id_pressed)
-	
+	_ensure_popup_menu()
 	connection_request.connect(_on_connection_request)
 	disconnection_request.connect(_on_disconnect_request)
-
-func _exit_tree() -> void:
-	if popup_menu:
-		popup_menu.queue_free()
-		popup_menu = null
-
 
 func _gui_input(event):
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
 			# Save graph-space position (important!)
-			click_position = get_local_mouse_position()
+			click_position = event.position
 			
 			# Check if hovering a node
 			hovered_node = null
@@ -134,6 +129,7 @@ func _gui_input(event):
 						break
 			
 			# Prepare context menu
+			_ensure_popup_menu()
 			popup_menu.clear()
 			var id := 0
 			for name in node_types.keys():
@@ -148,8 +144,13 @@ func _gui_input(event):
 					if res_name != "":
 						node_name = res_name
 				popup_menu.add_item("Delete " + str(node_name), DELETE_NODE_ID)
-			popup_menu.set_position(get_window().position + Vector2i(get_global_mouse_position()))
-
+			popup_menu.reset_size()
+			var popup_pos := Vector2i(event.global_position)
+			var win := get_window()
+			if win:
+				popup_pos += win.position
+			popup_menu.set_position(popup_pos)
+			popup_menu.popup()
 
 func _on_popup_id_pressed(id):
 	if id == DELETE_NODE_ID:
@@ -282,6 +283,7 @@ func edit_streamweaver_resource(streamweaver_resource: StreamWeaverAudioStream):
 	var nodes_to_load = {
 		"Input Stream": current_resource.streams,
 		"Stream Mixer 2-Way": current_resource.streams,
+		"Stream 3-Slice": current_resource.streams,
 		"Output Randomize": current_resource.streams,
 		"Output Looping": current_resource.streams,
 		"Output Granular Sweep": current_resource.streams,
@@ -307,7 +309,7 @@ func edit_streamweaver_resource(streamweaver_resource: StreamWeaverAudioStream):
 			if _get_node_type_for_resource(res) != type_name:
 				continue
 			var node_instance = scene.instantiate()
-			if res.resource_name == "":
+			if res.resource_name != "":
 				node_instance.name = res.resource_name
 			else:
 				node_instance.name = "%s %d" % [ type_name, counter]
