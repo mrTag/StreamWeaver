@@ -244,6 +244,7 @@ protected:
     godot::LocalVector<StreamWeaverRuntimeTriggerableInterface*> triggerables;
 public:
     virtual ~StreamWeaverTriggerRuntimeInstance() = default;
+    virtual void reset() {}
 
     void add_triggerable(StreamWeaverRuntimeTriggerableInterface* triggerable) { triggerables.push_back(triggerable); }
     void trigger_all_triggerables()
@@ -283,6 +284,23 @@ public:
     void release_runtime_instance(StreamWeaverTriggerRuntimeInstance* instance) override;
 };
 
+class StreamWeaverTriggerPlay : public StreamWeaverTrigger
+{
+    GDCLASS(StreamWeaverTriggerPlay, StreamWeaverTrigger)
+
+    static void _bind_methods();
+public:
+    StreamWeaverTriggerRuntimeInstance* create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
+    void release_runtime_instance(StreamWeaverTriggerRuntimeInstance* instance) override;
+};
+class StreamWeaverTriggerSub : public StreamWeaverTrigger {
+	GDCLASS(StreamWeaverTriggerSub, StreamWeaverTrigger)
+	static void _bind_methods() {}
+public:
+	StreamWeaverTriggerRuntimeInstance* create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
+	void release_runtime_instance(StreamWeaverTriggerRuntimeInstance* instance) override;
+};
+
 class StreamWeaverTriggerConditionalParameter : public StreamWeaverTrigger {
 	GDCLASS(StreamWeaverTriggerConditionalParameter, StreamWeaverTrigger)
 
@@ -292,7 +310,39 @@ public:
 		EQ, LT, GT, LTE, GTE, NEQ
 	};
 private:
-    godot::Ref<StreamWeaverTrigger> input_trigger;
+	godot::Ref<StreamWeaverParameter> parameter;
+	godot::Ref<StreamWeaverTrigger> false_trigger;
+	Comparison comparison_type = EQ;
+	float value = 0;
+
+	void update_name();
+public:
+	StreamWeaverTriggerConditionalParameter();
+
+	[[nodiscard]] godot::Ref<StreamWeaverParameter> GetParameter() const { return parameter; }
+	void SetParameter(godot::Ref<StreamWeaverParameter> p) { parameter = p; update_name(); }
+	[[nodiscard]] godot::Ref<StreamWeaverTrigger> GetFalseTrigger() const;
+	void SetFalseTrigger(godot::Ref<StreamWeaverTrigger> p_trigger);
+	[[nodiscard]] int GetComparisonType() const { return comparison_type; }
+	void SetComparisonType(int comparisonType) { comparison_type = static_cast<Comparison>(comparisonType); update_name(); }
+	[[nodiscard]] float GetValue() const { return value; }
+	void SetValue(float v) { this->value = v; update_name(); }
+
+	StreamWeaverTriggerRuntimeInstance* create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
+	void release_runtime_instance(StreamWeaverTriggerRuntimeInstance* instance) override;
+};
+VARIANT_ENUM_CAST(StreamWeaverTriggerConditionalParameter::Comparison);
+
+class StreamWeaverTriggerFilterConditionalParameter : public StreamWeaverTrigger {
+	GDCLASS(StreamWeaverTriggerFilterConditionalParameter, StreamWeaverTrigger)
+
+	static void _bind_methods();
+public:
+	enum Comparison {
+		EQ, LT, GT, LTE, GTE, NEQ
+	};
+private:
+	godot::Ref<StreamWeaverTrigger> input_trigger;
 	godot::Ref<StreamWeaverParameterInput> parameter;
 	Comparison comparison_type = EQ;
 	float value = 0;
@@ -311,17 +361,18 @@ private:
 public:
 	[[nodiscard]] godot::Ref<StreamWeaverParameterInput> GetParameter() const { return parameter; }
 	void SetParameter(godot::Ref<StreamWeaverParameterInput> p) { parameter = p; update_name(); }
-    [[nodiscard]] godot::Ref<StreamWeaverTrigger> GetInputTrigger() const { return input_trigger; }
-    void SetInputTrigger(godot::Ref<StreamWeaverTrigger> inputTrigger) { input_trigger = inputTrigger; }
+	[[nodiscard]] godot::Ref<StreamWeaverTrigger> GetInputTrigger() const { return input_trigger; }
+	void SetInputTrigger(godot::Ref<StreamWeaverTrigger> inputTrigger) { input_trigger = inputTrigger; }
 	[[nodiscard]] int GetComparisonType() const { return comparison_type; }
 	void SetComparisonType(int comparisonType) { comparison_type = static_cast<Comparison>(comparisonType); update_name(); }
 	[[nodiscard]] float GetValue() const { return value; }
 	void SetValue(float v) { this->value = v; update_name(); }
 
-    StreamWeaverTriggerRuntimeInstance* create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
-    void release_runtime_instance(StreamWeaverTriggerRuntimeInstance* instance) override;
+	StreamWeaverTriggerRuntimeInstance* create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) override;
+	void release_runtime_instance(StreamWeaverTriggerRuntimeInstance* instance) override;
 };
-VARIANT_ENUM_CAST(StreamWeaverTriggerConditionalParameter::Comparison);
+VARIANT_ENUM_CAST(StreamWeaverTriggerFilterConditionalParameter::Comparison);
+
 
 
 class StreamWeaverTriggerConditionalParameterRange : public StreamWeaverTrigger {
@@ -721,8 +772,11 @@ class StreamWeaverAudioStream : public godot::AudioStream {
 	godot::Vector2 master_output_position = godot::Vector2(800, 300);
 	float master_volume_db = 0.0f;
 	godot::Ref<StreamWeaverParameter> master_volume_multiplier;
+	godot::Ref<StreamWeaverTriggerPlay> play_trigger;
 
 public:
+	StreamWeaverAudioStream();
+	void ensure_play_trigger();
 	[[nodiscard]] godot::Ref<godot::AudioStreamPlayback> _instantiate_playback() const override;
 	[[nodiscard]] godot::String _get_stream_name() const override;
 
@@ -742,6 +796,8 @@ public:
 	[[nodiscard]] godot::Ref<StreamWeaverParameter> GetMasterVolumeMultiplier() const { return master_volume_multiplier; }
 	void SetMasterVolumeMultiplier(godot::Ref<StreamWeaverParameter> p_param) { master_volume_multiplier = p_param; }
 
+	[[nodiscard]] godot::Ref<StreamWeaverTriggerPlay> GetPlayTrigger() const;
+	void SetPlayTrigger(godot::Ref<StreamWeaverTriggerPlay> p_trigger);
 };
 
 class StreamWeaverAudioStreamPlayback : public godot::AudioStreamPlayback {
@@ -768,6 +824,7 @@ class StreamWeaverAudioStreamPlayback : public godot::AudioStreamPlayback {
 	float master_volume_ramp_step = 0.0f;
 	bool master_volume_ramp_initialized = false;
 
+	StreamWeaverTriggerRuntimeInstance* play_trigger_runtime = nullptr;
 	uint32_t mix_generation = 0;
 	bool active = false;
 
@@ -776,6 +833,8 @@ public:
 	~StreamWeaverAudioStreamPlayback() override;
 	[[nodiscard]] const StreamWeaverAudioStream& GetParent() const { return *parent_stream.ptr(); }
 
+	godot::Ref<class StreamWeaverDummyPlayback> dummy_playback;
+	godot::LocalVector<godot::AudioFrame> mix_staging_buffer;
 	godot::SpinLock* get_mix_lock() { return &mix_lock; }
 
 	StreamWeaverParameterRuntimeInstance* get_parameter_runtime_instance(godot::Ref<StreamWeaverParameter> parameter);
@@ -790,6 +849,15 @@ public:
 	void _start(double p_from_pos) override;
 	void _stop() override;
 	bool _is_playing() const override;
+	int32_t _mix(godot::AudioFrame *p_buffer, float p_rate_scale, int32_t p_frames) override;
+};
+
+class StreamWeaverDummyPlayback : public godot::AudioStreamPlayback {
+	GDCLASS(StreamWeaverDummyPlayback, godot::AudioStreamPlayback)
+protected:
+	static void _bind_methods();
+public:
+	const godot::AudioFrame* copy_src = nullptr;
 	int32_t _mix(godot::AudioFrame *p_buffer, float p_rate_scale, int32_t p_frames) override;
 };
 

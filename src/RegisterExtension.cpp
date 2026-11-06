@@ -48,12 +48,16 @@ namespace
 
         godot::ClassDB::register_abstract_class<StreamWeaverTrigger>();
         godot::ClassDB::register_class<StreamWeaverTriggerInput>();
+        godot::ClassDB::register_class<StreamWeaverTriggerPlay>();
+        godot::ClassDB::register_class<StreamWeaverTriggerSub>();
         godot::ClassDB::register_class<StreamWeaverTriggerConditionalParameter>();
+        godot::ClassDB::register_class<StreamWeaverTriggerFilterConditionalParameter>();
         godot::ClassDB::register_class<StreamWeaverTriggerConditionalParameterRange>();
         godot::ClassDB::register_class<StreamWeaverTriggerDelay>();
         godot::ClassDB::register_class<StreamWeaverTriggerMetronome>();
         godot::ClassDB::register_class<StreamWeaverAudioStream>();
         godot::ClassDB::register_class<StreamWeaverAudioStreamPlayback>();
+        godot::ClassDB::register_internal_class<StreamWeaverDummyPlayback>();
 
         godot::ClassDB::register_class<StreamWeaverFFT>();
         godot::ClassDB::register_class<StreamWeaverGrainsDatabase>();

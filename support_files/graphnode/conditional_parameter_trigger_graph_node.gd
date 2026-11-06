@@ -1,8 +1,10 @@
 @tool
 class_name ConditionalParameterTriggerGraphNode extends GraphNode
 
-const LEFT_PORT_INPUT_TRIGGER : int = 0
-const LEFT_PORT_PARAMETER : int = 1
+const LEFT_PORT_PARAMETER : int = 0
+
+const RIGHT_PORT_TRUE : int = 0
+const RIGHT_PORT_FALSE : int = 1
 
 var current_resource: StreamWeaverTriggerConditionalParameter
 
@@ -35,20 +37,23 @@ func remove_from_stream_weaver_audio_stream(audio_stream_resource: StreamWeaverA
 
 func get_right_port_for_resource(res: Resource) -> int:
 	if res == current_resource:
-		return 0
+		return RIGHT_PORT_TRUE
+	if current_resource and current_resource.false_trigger == res:
+		return RIGHT_PORT_FALSE
 	return -1
 
-func get_resource_for_right_port(_port: int) -> Resource:
-	return current_resource
+func get_resource_for_right_port(port: int) -> Resource:
+	if port == RIGHT_PORT_TRUE:
+		return current_resource
+	elif port == RIGHT_PORT_FALSE:
+		return current_resource.false_trigger if current_resource else null
+	return null
 
 func get_left_port_connections() -> Dictionary[int, Array]:
 	var connections : Dictionary[int, Array] = {
-		LEFT_PORT_INPUT_TRIGGER: Array(),
 		LEFT_PORT_PARAMETER: Array()
 	}
-	if current_resource.input_trigger:
-		connections[LEFT_PORT_INPUT_TRIGGER].append(current_resource.input_trigger)
-	if current_resource.parameter:
+	if current_resource and current_resource.parameter:
 		connections[LEFT_PORT_PARAMETER].append(current_resource.parameter)
 	return connections
 
@@ -57,14 +62,7 @@ func connect_to(other: GraphNode, other_port: int, this_port: int, only_check:bo
 		return false
 	var res = other.get_resource_for_right_port(other_port)
 	
-	if this_port == LEFT_PORT_INPUT_TRIGGER:
-		if res is StreamWeaverTrigger:
-			if current_resource.input_trigger == res:
-				return false
-			if not only_check:
-				current_resource.input_trigger = res
-			return true
-	elif this_port == LEFT_PORT_PARAMETER:
+	if this_port == LEFT_PORT_PARAMETER:
 		if res is StreamWeaverParameter:
 			if current_resource.parameter == res:
 				return false
@@ -81,10 +79,7 @@ func disconnect_from(other: GraphNode, other_port: int, this_port: int):
 		return
 	var res = other.get_resource_for_right_port(other_port)
 	
-	if this_port == LEFT_PORT_INPUT_TRIGGER:
-		if res == current_resource.input_trigger:
-			current_resource.input_trigger = null
-	elif this_port == LEFT_PORT_PARAMETER:
+	if this_port == LEFT_PORT_PARAMETER:
 		if res == current_resource.parameter:
 			current_resource.parameter = null
 
@@ -120,9 +115,9 @@ func _on_dragged(_from: Vector2, to: Vector2):
 
 func _update_ui():
 	if current_resource:
-		if comparison_type_button.selected != current_resource.comparison_type:
+		if comparison_type_button and comparison_type_button.selected != current_resource.comparison_type:
 			comparison_type_button.selected = current_resource.comparison_type
-		if value_spin_box.value != current_resource.value:
+		if value_spin_box and value_spin_box.value != current_resource.value:
 			value_spin_box.value = current_resource.value
 		if position_offset != current_resource.graph_node_position:
 			position_offset = current_resource.graph_node_position

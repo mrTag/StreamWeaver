@@ -5,6 +5,9 @@ extends GraphEdit
 # Key = display name in menu
 # Value = PackedScene (GraphNode-based)
 var master_output_scene := preload("res://addons/StreamWeaver/graphnode/master_output.tscn")
+var play_trigger_scene := preload("res://addons/StreamWeaver/graphnode/play_trigger.tscn")
+const PlayTriggerGraphNode = preload("res://addons/StreamWeaver/graphnode/play_trigger_graph_node.gd")
+const MasterOutputGraphNode = preload("res://addons/StreamWeaver/graphnode/master_output_graph_node.gd")
 
 var node_types := {
 	"Input Stream": preload("res://addons/StreamWeaver/graphnode/input_stream.tscn"),
@@ -13,6 +16,7 @@ var node_types := {
 	"Input Parameter": preload("res://addons/StreamWeaver/graphnode/input_parameter.tscn"),
 	"Input Trigger": preload("res://addons/StreamWeaver/graphnode/input_trigger.tscn"),
 	"Conditional Parameter Trigger": preload("res://addons/StreamWeaver/graphnode/conditional_parameter_trigger.tscn"),
+	"Filter Conditional Parameter Trigger": preload("res://addons/StreamWeaver/graphnode/filter_conditional_parameter_trigger.tscn"),
 	"Conditional Range Trigger": preload("res://addons/StreamWeaver/graphnode/conditional_parameter_range_trigger.tscn"),
 	"Metronome Trigger": preload("res://addons/StreamWeaver/graphnode/metronome_trigger.tscn"),
 	"Delay Trigger": preload("res://addons/StreamWeaver/graphnode/delay_trigger.tscn"),
@@ -40,6 +44,8 @@ func _create_resource_for_node_type(node_type_name: String) -> Resource:
 			return InputTriggerGraphNode.create_new_resource(current_resource)
 		"Conditional Parameter Trigger":
 			return ConditionalParameterTriggerGraphNode.create_new_resource(current_resource)
+		"Filter Conditional Parameter Trigger":
+			return FilterConditionalParameterTriggerGraphNode.create_new_resource(current_resource)
 		"Conditional Range Trigger":
 			return ConditionalParameterRangeTriggerGraphNode.create_new_resource(current_resource)
 		"Metronome Trigger":
@@ -73,6 +79,7 @@ func _get_node_type_for_resource(res: Resource) -> String:
 	if res is StreamWeaverParameterInput: return "Input Parameter"
 	if res is StreamWeaverTriggerInput: return "Input Trigger"
 	if res is StreamWeaverTriggerConditionalParameter: return "Conditional Parameter Trigger"
+	if res is StreamWeaverTriggerFilterConditionalParameter: return "Filter Conditional Parameter Trigger"
 	if res is StreamWeaverTriggerConditionalParameterRange: return "Conditional Range Trigger"
 	if res is StreamWeaverTriggerMetronome: return "Metronome Trigger"
 	if res is StreamWeaverTriggerDelay: return "Delay Trigger"
@@ -136,7 +143,7 @@ func _gui_input(event):
 				popup_menu.add_item("Add " + name, id)
 				id += 1
 			
-			if hovered_node and not (hovered_node is MasterOutputGraphNode):
+			if hovered_node and not (hovered_node is MasterOutputGraphNode) and not (hovered_node is PlayTriggerGraphNode):
 				popup_menu.add_separator()
 				var node_name := hovered_node.name
 				if "current_resource" in hovered_node:
@@ -155,7 +162,7 @@ func _gui_input(event):
 func _on_popup_id_pressed(id):
 	if id == DELETE_NODE_ID:
 		if hovered_node:
-			if hovered_node is MasterOutputGraphNode:
+			if hovered_node is MasterOutputGraphNode or hovered_node is PlayTriggerGraphNode:
 				return
 			var res = hovered_node.get("current_resource")
 			var orginal_node_name := hovered_node.name
@@ -291,6 +298,7 @@ func edit_streamweaver_resource(streamweaver_resource: StreamWeaverAudioStream):
 		"Input Parameter": current_resource.parameters,
 		"Input Trigger": current_resource.triggers,
 		"Conditional Parameter Trigger": current_resource.triggers,
+		"Filter Conditional Parameter Trigger": current_resource.triggers,
 		"Conditional Range Trigger": current_resource.triggers,
 		"Metronome Trigger": current_resource.triggers,
 		"Delay Trigger": current_resource.triggers,
@@ -324,6 +332,13 @@ func edit_streamweaver_resource(streamweaver_resource: StreamWeaverAudioStream):
 	add_child(master_node)
 	master_node.initialize(current_resource)
 	all_nodes.append(master_node)
+
+	# Spawn Play Trigger node
+	var play_node = play_trigger_scene.instantiate()
+	play_node.name = "Play"
+	add_child(play_node)
+	play_node.initialize(current_resource)
+	all_nodes.append(play_node)
 
 	# Restore connections
 	for node_to in all_nodes:

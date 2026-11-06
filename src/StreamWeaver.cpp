@@ -539,7 +539,79 @@ void StreamWeaverTriggerInput::release_runtime_instance(
     }
 }
 
+// -------------------- StreamWeaverTriggerPlay --------------------
+void StreamWeaverTriggerPlay::_bind_methods() {
+}
+
+StreamWeaverTriggerRuntimeInstance* StreamWeaverTriggerPlay::create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) {
+    return memnew(StreamWeaverTriggerRuntimeInstance);
+}
+
+void StreamWeaverTriggerPlay::release_runtime_instance(StreamWeaverTriggerRuntimeInstance* instance) {
+    if (instance) {
+        memdelete(instance);
+    }
+}
+
+// -------------------- StreamWeaverTriggerSub --------------------
+StreamWeaverTriggerRuntimeInstance* StreamWeaverTriggerSub::create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) {
+	return memnew(StreamWeaverTriggerRuntimeInstance);
+}
+
+void StreamWeaverTriggerSub::release_runtime_instance(StreamWeaverTriggerRuntimeInstance* instance) {
+	if (instance) {
+		memdelete(instance);
+	}
+}
+
 // -------------------- StreamWeaverTriggerConditionalParameter --------------------
+StreamWeaverTriggerConditionalParameter::StreamWeaverTriggerConditionalParameter() {
+	false_trigger = memnew(StreamWeaverTriggerSub);
+	false_trigger->set_name("False");
+}
+
+Ref<StreamWeaverTrigger> StreamWeaverTriggerConditionalParameter::GetFalseTrigger() const {
+	if (false_trigger.is_null()) {
+		const_cast<StreamWeaverTriggerConditionalParameter*>(this)->false_trigger = memnew(StreamWeaverTriggerSub);
+		const_cast<StreamWeaverTriggerConditionalParameter*>(this)->false_trigger->set_name("False");
+	}
+	return false_trigger;
+}
+
+void StreamWeaverTriggerConditionalParameter::SetFalseTrigger(Ref<StreamWeaverTrigger> p_trigger) {
+	false_trigger = p_trigger;
+	if (false_trigger.is_null()) {
+		false_trigger = memnew(StreamWeaverTriggerSub);
+		false_trigger->set_name("False");
+	}
+}
+
+void StreamWeaverTriggerConditionalParameter::update_name() {
+	godot::String param_name = "<null>";
+	if (parameter.is_valid()) {
+		if (auto* input_param = cast_to<StreamWeaverParameterInput>(parameter.ptr())) {
+			param_name = input_param->GetParameterName();
+		} else {
+			param_name = parameter->get_name();
+			if (param_name.is_empty()) {
+				param_name = parameter->get_class();
+			}
+		}
+	}
+	set_name(godot::vformat("%s %s %f",
+		param_name,
+		comparison_type == EQ ? "==" :
+		comparison_type == LT ? "<" :
+		comparison_type == GT ? ">" :
+		comparison_type == LTE ? "<=" :
+		comparison_type == GTE ? ">=" :
+		"!=",
+		value));
+	if (false_trigger.is_valid()) {
+		false_trigger->set_name(godot::vformat("%s (False)", get_name()));
+	}
+}
+
 void StreamWeaverTriggerConditionalParameter::_bind_methods() {
 	BIND_ENUM_CONSTANT(EQ);
 	BIND_ENUM_CONSTANT(LT);
@@ -550,65 +622,74 @@ void StreamWeaverTriggerConditionalParameter::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("get_parameter"), &StreamWeaverTriggerConditionalParameter::GetParameter);
 	ClassDB::bind_method(D_METHOD("set_parameter", "parameter"), &StreamWeaverTriggerConditionalParameter::SetParameter);
-    ClassDB::bind_method(D_METHOD("get_input_trigger"), &StreamWeaverTriggerConditionalParameter::GetInputTrigger);
-    ClassDB::bind_method(D_METHOD("set_input_trigger", "input_trigger"), &StreamWeaverTriggerConditionalParameter::SetInputTrigger);
+	ClassDB::bind_method(D_METHOD("get_false_trigger"), &StreamWeaverTriggerConditionalParameter::GetFalseTrigger);
+	ClassDB::bind_method(D_METHOD("set_false_trigger", "trigger"), &StreamWeaverTriggerConditionalParameter::SetFalseTrigger);
 	ClassDB::bind_method(D_METHOD("get_comparison_type"), &StreamWeaverTriggerConditionalParameter::GetComparisonType);
 	ClassDB::bind_method(D_METHOD("set_comparison_type", "comparison_type"), &StreamWeaverTriggerConditionalParameter::SetComparisonType);
 	ClassDB::bind_method(D_METHOD("get_value"), &StreamWeaverTriggerConditionalParameter::GetValue);
 	ClassDB::bind_method(D_METHOD("set_value", "value"), &StreamWeaverTriggerConditionalParameter::SetValue);
 
-	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "parameter", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverParameterInput"), "set_parameter", "get_parameter");
-    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "input_trigger", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverTriggerInput"), "set_input_trigger", "get_input_trigger");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "parameter", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverParameter"), "set_parameter", "get_parameter");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "false_trigger", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverTrigger", PROPERTY_USAGE_DEFAULT), "set_false_trigger", "get_false_trigger");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "comparison_type", PROPERTY_HINT_ENUM, "EQ,LT,GT,LTE,GTE,NEQ"), "set_comparison_type", "get_comparison_type");
-
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "value"), "set_value", "get_value");
 }
 
-class StreamWeaverTriggerRuntimeInstanceConditionalParameter : public StreamWeaverTriggerRuntimeInstance, public StreamWeaverRuntimeTriggerableInterface
+class StreamWeaverTriggerRuntimeInstanceConditionalParameter : public StreamWeaverTriggerRuntimeInstance, public StreamWeaverTickInterface
 {
 public:
-    StreamWeaverParameterRuntimeInstance* parameter_runtime_instance = nullptr;
-    StreamWeaverTriggerConditionalParameter::Comparison comparison_type;
-    float value;
+	StreamWeaverParameterRuntimeInstance* parameter_runtime_instance = nullptr;
+	StreamWeaverTriggerRuntimeInstance* false_trigger_runtime_instance = nullptr;
+	StreamWeaverTriggerConditionalParameter::Comparison comparison_type = StreamWeaverTriggerConditionalParameter::EQ;
+	float value = 0.0f;
+	bool last_condition = false;
 
-    void trigger() override {
-        if (parameter_runtime_instance == nullptr) {
-            return;
-        }
+	void reset() override {
+		last_condition = false;
+	}
 
-        float parameterValue = parameter_runtime_instance->get_value();
-        bool should_trigger = false;
-        switch (comparison_type) {
-            case StreamWeaverTriggerConditionalParameter::EQ: should_trigger = Math::is_equal_approx(parameterValue, value); break;
-            case StreamWeaverTriggerConditionalParameter::NEQ: should_trigger = !Math::is_equal_approx(parameterValue, value); break;
-            case StreamWeaverTriggerConditionalParameter::LT: should_trigger = parameterValue < value; break;
-            case StreamWeaverTriggerConditionalParameter::GT: should_trigger = parameterValue > value; break;
-            case StreamWeaverTriggerConditionalParameter::LTE: should_trigger = parameterValue <= value; break;
-            case StreamWeaverTriggerConditionalParameter::GTE: should_trigger = parameterValue >= value; break;
-        }
+	void tick(float delta) override {
+		if (parameter_runtime_instance == nullptr) {
+			return;
+		}
 
-        if (should_trigger) {
-            trigger_all_triggerables();
-        }
-    }
+		float parameter_value = parameter_runtime_instance->get_value();
+		bool condition = false;
+		switch (comparison_type) {
+			case StreamWeaverTriggerConditionalParameter::EQ: condition = Math::is_equal_approx(parameter_value, value); break;
+			case StreamWeaverTriggerConditionalParameter::NEQ: condition = !Math::is_equal_approx(parameter_value, value); break;
+			case StreamWeaverTriggerConditionalParameter::LT: condition = parameter_value < value; break;
+			case StreamWeaverTriggerConditionalParameter::GT: condition = parameter_value > value; break;
+			case StreamWeaverTriggerConditionalParameter::LTE: condition = parameter_value <= value; break;
+			case StreamWeaverTriggerConditionalParameter::GTE: condition = parameter_value >= value; break;
+		}
+
+		if (condition != last_condition) {
+			last_condition = condition;
+			if (condition) {
+				trigger_all_triggerables();
+			} else if (false_trigger_runtime_instance) {
+				false_trigger_runtime_instance->trigger_all_triggerables();
+			}
+		}
+	}
 };
 
 StreamWeaverTriggerRuntimeInstance* StreamWeaverTriggerConditionalParameter::create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) {
-    StreamWeaverTriggerRuntimeInstanceConditionalParameter* instance = memnew(StreamWeaverTriggerRuntimeInstanceConditionalParameter);
-    if (parameter.is_valid())
-    {
-        instance->parameter_runtime_instance = from_playback->get_parameter_runtime_instance(parameter);
-    }
-    if (input_trigger.is_valid())
-    {
-        auto input_trigger_runtime_instance = from_playback->get_trigger_runtime_instance(input_trigger);
-        if (input_trigger_runtime_instance) {
-            input_trigger_runtime_instance->add_triggerable(instance);
-        }
-    }
-    instance->comparison_type = comparison_type;
-    instance->value = value;
-    return instance;
+	auto* instance = memnew(StreamWeaverTriggerRuntimeInstanceConditionalParameter);
+	if (parameter.is_valid()) {
+		instance->parameter_runtime_instance = from_playback->get_parameter_runtime_instance(parameter);
+	}
+	if (false_trigger.is_null()) {
+		false_trigger = memnew(StreamWeaverTriggerSub);
+		false_trigger->set_name("False");
+	}
+	instance->false_trigger_runtime_instance = from_playback->get_trigger_runtime_instance(false_trigger);
+	instance->comparison_type = comparison_type;
+	instance->value = value;
+	instance->last_condition = false;
+	from_playback->add_ticking(instance);
+	return instance;
 }
 
 void StreamWeaverTriggerConditionalParameter::release_runtime_instance(StreamWeaverTriggerRuntimeInstance* instance) {
@@ -617,6 +698,80 @@ void StreamWeaverTriggerConditionalParameter::release_runtime_instance(StreamWea
 	}
 }
 
+// -------------------- StreamWeaverTriggerFilterConditionalParameter --------------------
+void StreamWeaverTriggerFilterConditionalParameter::_bind_methods() {
+	BIND_ENUM_CONSTANT(EQ);
+	BIND_ENUM_CONSTANT(LT);
+	BIND_ENUM_CONSTANT(GT);
+	BIND_ENUM_CONSTANT(LTE);
+	BIND_ENUM_CONSTANT(GTE);
+	BIND_ENUM_CONSTANT(NEQ);
+
+	ClassDB::bind_method(D_METHOD("get_parameter"), &StreamWeaverTriggerFilterConditionalParameter::GetParameter);
+	ClassDB::bind_method(D_METHOD("set_parameter", "parameter"), &StreamWeaverTriggerFilterConditionalParameter::SetParameter);
+	ClassDB::bind_method(D_METHOD("get_input_trigger"), &StreamWeaverTriggerFilterConditionalParameter::GetInputTrigger);
+	ClassDB::bind_method(D_METHOD("set_input_trigger", "input_trigger"), &StreamWeaverTriggerFilterConditionalParameter::SetInputTrigger);
+	ClassDB::bind_method(D_METHOD("get_comparison_type"), &StreamWeaverTriggerFilterConditionalParameter::GetComparisonType);
+	ClassDB::bind_method(D_METHOD("set_comparison_type", "comparison_type"), &StreamWeaverTriggerFilterConditionalParameter::SetComparisonType);
+	ClassDB::bind_method(D_METHOD("get_value"), &StreamWeaverTriggerFilterConditionalParameter::GetValue);
+	ClassDB::bind_method(D_METHOD("set_value", "value"), &StreamWeaverTriggerFilterConditionalParameter::SetValue);
+
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "parameter", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverParameterInput"), "set_parameter", "get_parameter");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "input_trigger", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverTrigger"), "set_input_trigger", "get_input_trigger");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "comparison_type", PROPERTY_HINT_ENUM, "EQ,LT,GT,LTE,GTE,NEQ"), "set_comparison_type", "get_comparison_type");
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "value"), "set_value", "get_value");
+}
+
+class StreamWeaverTriggerRuntimeInstanceFilterConditionalParameter : public StreamWeaverTriggerRuntimeInstance, public StreamWeaverRuntimeTriggerableInterface
+{
+public:
+	StreamWeaverParameterRuntimeInstance* parameter_runtime_instance = nullptr;
+	StreamWeaverTriggerFilterConditionalParameter::Comparison comparison_type = StreamWeaverTriggerFilterConditionalParameter::EQ;
+	float value = 0.0f;
+
+	void trigger() override {
+		if (parameter_runtime_instance == nullptr) {
+			return;
+		}
+
+		float parameter_value = parameter_runtime_instance->get_value();
+		bool should_trigger = false;
+		switch (comparison_type) {
+			case StreamWeaverTriggerFilterConditionalParameter::EQ: should_trigger = Math::is_equal_approx(parameter_value, value); break;
+			case StreamWeaverTriggerFilterConditionalParameter::NEQ: should_trigger = !Math::is_equal_approx(parameter_value, value); break;
+			case StreamWeaverTriggerFilterConditionalParameter::LT: should_trigger = parameter_value < value; break;
+			case StreamWeaverTriggerFilterConditionalParameter::GT: should_trigger = parameter_value > value; break;
+			case StreamWeaverTriggerFilterConditionalParameter::LTE: should_trigger = parameter_value <= value; break;
+			case StreamWeaverTriggerFilterConditionalParameter::GTE: should_trigger = parameter_value >= value; break;
+		}
+
+		if (should_trigger) {
+			trigger_all_triggerables();
+		}
+	}
+};
+
+StreamWeaverTriggerRuntimeInstance* StreamWeaverTriggerFilterConditionalParameter::create_runtime_instance(StreamWeaverAudioStreamPlayback* from_playback) {
+	auto* instance = memnew(StreamWeaverTriggerRuntimeInstanceFilterConditionalParameter);
+	if (parameter.is_valid()) {
+		instance->parameter_runtime_instance = from_playback->get_parameter_runtime_instance(parameter);
+	}
+	if (input_trigger.is_valid()) {
+		auto* input_trigger_runtime_instance = from_playback->get_trigger_runtime_instance(input_trigger);
+		if (input_trigger_runtime_instance) {
+			input_trigger_runtime_instance->add_triggerable(instance);
+		}
+	}
+	instance->comparison_type = comparison_type;
+	instance->value = value;
+	return instance;
+}
+
+void StreamWeaverTriggerFilterConditionalParameter::release_runtime_instance(StreamWeaverTriggerRuntimeInstance* instance) {
+	if (instance) {
+		memdelete(instance);
+	}
+}
 // -------------------- StreamWeaverTriggerConditionalParameterRange --------------------
 void StreamWeaverTriggerConditionalParameterRange::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_parameter"), &StreamWeaverTriggerConditionalParameterRange::GetParameter);
@@ -903,7 +1058,6 @@ public:
 		currently_playing_inputs.push_back(runtime_input);
 	}
 	void reset() override {
-		SpinLockGuard guard(*playback_lock);
 		currently_playing_inputs.clear();
 		trigger();
 	}
@@ -2365,6 +2519,24 @@ void StreamWeaverStream3Slice::release_runtime_instance(StreamWeaverStreamRuntim
 	}
 }
 
+StreamWeaverAudioStream::StreamWeaverAudioStream() = default;
+
+void StreamWeaverAudioStream::ensure_play_trigger() {
+    if (play_trigger.is_null()) {
+        play_trigger.instantiate();
+        play_trigger->set_name("Play");
+        play_trigger->SetGraphNodePosition(godot::Vector2(40, 300));
+    }
+}
+
+Ref<StreamWeaverTriggerPlay> StreamWeaverAudioStream::GetPlayTrigger() const {
+    return play_trigger;
+}
+
+void StreamWeaverAudioStream::SetPlayTrigger(Ref<StreamWeaverTriggerPlay> p_trigger) {
+    play_trigger = p_trigger;
+}
+
 // -------------------- StreamWeaverAudioStream --------------------
 void StreamWeaverAudioStream::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_parameters"), &StreamWeaverAudioStream::GetParameters);
@@ -2382,6 +2554,9 @@ void StreamWeaverAudioStream::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_master_volume_db", "volume_db"), &StreamWeaverAudioStream::SetMasterVolumeDb);
 	ClassDB::bind_method(D_METHOD("get_master_volume_multiplier"), &StreamWeaverAudioStream::GetMasterVolumeMultiplier);
 	ClassDB::bind_method(D_METHOD("set_master_volume_multiplier", "param"), &StreamWeaverAudioStream::SetMasterVolumeMultiplier);
+	ClassDB::bind_method(D_METHOD("ensure_play_trigger"), &StreamWeaverAudioStream::ensure_play_trigger);
+	ClassDB::bind_method(D_METHOD("get_play_trigger"), &StreamWeaverAudioStream::GetPlayTrigger);
+	ClassDB::bind_method(D_METHOD("set_play_trigger", "trigger"), &StreamWeaverAudioStream::SetPlayTrigger);
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "parameters", PROPERTY_HINT_ARRAY_TYPE, "StreamWeaverParameter"), "set_parameters", "get_parameters");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "triggers", PROPERTY_HINT_ARRAY_TYPE, "StreamWeaverTrigger"), "set_triggers", "get_triggers");
 	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "streams", PROPERTY_HINT_ARRAY_TYPE, "StreamWeaverStream"), "set_streams", "get_streams");
@@ -2390,6 +2565,7 @@ void StreamWeaverAudioStream::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2, "master_output_position"), "set_master_output_position", "get_master_output_position");
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "master_volume_db"), "set_master_volume_db", "get_master_volume_db");
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "master_volume_multiplier", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverParameter"), "set_master_volume_multiplier", "get_master_volume_multiplier");
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "play_trigger", PROPERTY_HINT_RESOURCE_TYPE, "StreamWeaverTriggerPlay"), "set_play_trigger", "get_play_trigger");
 }
 
 Ref<AudioStreamPlayback> StreamWeaverAudioStream::_instantiate_playback() const {
@@ -2542,6 +2718,14 @@ void StreamWeaverAudioStreamPlayback::initialize(Ref<StreamWeaverAudioStream> pa
     master_base_volume_db = parent->GetMasterVolumeDb();
     master_volume_ramp_initialized = false;
 
+    if (parent->GetPlayTrigger().is_valid()) {
+        play_trigger_runtime = get_trigger_runtime_instance(parent->GetPlayTrigger());
+    } else {
+        play_trigger_runtime = nullptr;
+    }
+    if (dummy_playback.is_null()) {
+        dummy_playback.instantiate();
+    }
     last_tick_time = chrono_clock::now();
 }
 
@@ -2555,17 +2739,29 @@ void StreamWeaverAudioStreamPlayback::trigger(StringName trigger) {
 	SpinLockGuard guard(mix_lock);
 	if ( auto trigger_runtime_instance = input_triggers.getptr( trigger )) {
 		(*trigger_runtime_instance)->trigger_all_triggerables();
+	} else if (play_trigger_runtime && (trigger == StringName("Play") || trigger == StringName("play"))) {
+		play_trigger_runtime->trigger_all_triggerables();
 	}
 }
 
 void StreamWeaverAudioStreamPlayback::_start(double p_from_pos) {
+	SpinLockGuard guard(mix_lock);
 	active = true;
     for (auto stream_runtime : master_stream_runtimes) {
         if (stream_runtime) {
             stream_runtime->reset();
         }
     }
+    for (auto& [trigger, trigger_instance] : all_triggers) {
+        if (trigger_instance) {
+            trigger_instance->reset();
+        }
+    }
+    if (play_trigger_runtime) {
+        play_trigger_runtime->trigger_all_triggerables();
+    }
 }
+
 
 void StreamWeaverAudioStreamPlayback::_stop() {
 	active = false;
@@ -2590,12 +2786,26 @@ int32_t StreamWeaverAudioStreamPlayback::_mix(AudioFrame *p_buffer, float p_rate
         }
     }
 
-	for (int i = 0; i < p_frames; ++i) {
-		p_buffer[i].left = 0;
-		p_buffer[i].right = 0;
-	}
-
     mix_generation++;
+
+    struct MasterAudioSource {
+        const AudioFrame *src = nullptr;
+        bool has_audio = false;
+    };
+    LocalVector<MasterAudioSource> master_sources;
+    for (auto stream_runtime : master_stream_runtimes) {
+        bool has_audio = false;
+        const AudioFrame *src = stream_runtime->pull_audio(p_frames, mix_generation, has_audio);
+        master_sources.push_back({ src, has_audio });
+    }
+
+    if (static_cast<int32_t>(mix_staging_buffer.size()) < p_frames) {
+        mix_staging_buffer.resize(p_frames);
+    }
+    for (int i = 0; i < p_frames; ++i) {
+        mix_staging_buffer[i].left = 0.0f;
+        mix_staging_buffer[i].right = 0.0f;
+    }
 
     float target_vol = UtilityFunctions::db_to_linear(master_base_volume_db) *
         (master_volume_multiplier_runtime ? master_volume_multiplier_runtime->get_value() : 1.0f);
@@ -2605,18 +2815,33 @@ int32_t StreamWeaverAudioStreamPlayback::_mix(AudioFrame *p_buffer, float p_rate
     }
     master_volume_ramp_step = (target_vol - master_volume_ramp_value) / float(p_frames > 0 ? p_frames : 1);
 
-    for (auto stream_runtime : master_stream_runtimes) {
-        bool has_audio = false;
-        const AudioFrame *src = stream_runtime->pull_audio(p_frames, mix_generation, has_audio);
-        if (has_audio && src) {
+    for (const auto& ms : master_sources) {
+        if (ms.has_audio && ms.src) {
             for (int i = 0; i < p_frames; ++i) {
                 float vol = master_volume_ramp_value + master_volume_ramp_step * float(i);
-                p_buffer[i].left += src[i].left * vol;
-                p_buffer[i].right += src[i].right * vol;
+                mix_staging_buffer[i].left += ms.src[i].left * vol;
+                mix_staging_buffer[i].right += ms.src[i].right * vol;
             }
         }
     }
     master_volume_ramp_value += master_volume_ramp_step * float(p_frames);
 
+    if (dummy_playback.is_valid()) {
+        dummy_playback->copy_src = mix_staging_buffer.ptr();
+        dummy_playback->mix_audio(1.0f, p_frames);
+        dummy_playback->copy_src = nullptr;
+    }
+
+    memcpy(p_buffer, mix_staging_buffer.ptr(), sizeof(AudioFrame) * p_frames);
+    return p_frames;
+}
+
+// -------------------- StreamWeaverDummyPlayback --------------------
+void StreamWeaverDummyPlayback::_bind_methods() {}
+
+int32_t StreamWeaverDummyPlayback::_mix(AudioFrame *p_buffer, float p_rate_scale, int32_t p_frames) {
+	if (copy_src) {
+		memcpy(p_buffer, copy_src, sizeof(AudioFrame) * p_frames);
+	}
 	return p_frames;
 }

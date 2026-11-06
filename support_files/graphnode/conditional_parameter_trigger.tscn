@@ -7,21 +7,21 @@ offset_right = 250.0
 offset_bottom = 169.0
 title = "Conditional Parameter Trigger"
 slot/0/left_enabled = true
-slot/0/left_type = 2
-slot/0/left_color = Color(0, 0.819608, 0.2, 1)
+slot/0/left_type = 1
+slot/0/left_color = Color(0.819608, 0.572549, 0, 1)
 slot/0/left_icon = null
 slot/0/right_enabled = true
 slot/0/right_type = 2
 slot/0/right_color = Color(0, 0.819608, 0.2, 1)
 slot/0/right_icon = null
 slot/0/draw_stylebox = true
-slot/1/left_enabled = true
-slot/1/left_type = 1
-slot/1/left_color = Color(0.819608, 0.572549, 0, 1)
+slot/1/left_enabled = false
+slot/1/left_type = 0
+slot/1/left_color = Color(1, 1, 1, 1)
 slot/1/left_icon = null
-slot/1/right_enabled = false
-slot/1/right_type = 0
-slot/1/right_color = Color(1, 1, 1, 1)
+slot/1/right_enabled = true
+slot/1/right_type = 2
+slot/1/right_color = Color(0, 0.819608, 0.2, 1)
 slot/1/right_icon = null
 slot/1/draw_stylebox = true
 slot/2/left_enabled = false
@@ -44,22 +44,27 @@ slot/3/right_icon = null
 slot/3/draw_stylebox = true
 script = ExtResource("1_cond")
 
-[node name="HBoxContainer" type="HBoxContainer" parent="." unique_id=714070350]
+[node name="Row0" type="HBoxContainer" parent="." unique_id=714070350]
 layout_mode = 2
 
-[node name="InputTriggerLabel" type="Label" parent="HBoxContainer" unique_id=1770750668]
+[node name="ParameterLabel" type="Label" parent="Row0" unique_id=813332167]
 layout_mode = 2
-text = "Input Trigger"
+text = "Parameter"
 
-[node name="InputTriggerLabel2" type="Label" parent="HBoxContainer" unique_id=746711362]
+[node name="TrueLabel" type="Label" parent="Row0" unique_id=746711362]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "Output"
+text = "True"
 horizontal_alignment = 2
 
-[node name="ParameterLabel" type="Label" parent="." unique_id=813332167]
+[node name="Row1" type="HBoxContainer" parent="." unique_id=714070351]
 layout_mode = 2
-text = "Check Parameter"
+
+[node name="FalseLabel" type="Label" parent="Row1" unique_id=746711363]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "False"
+horizontal_alignment = 2
 
 [node name="ComparisonType" type="OptionButton" parent="." unique_id=1336530916]
 unique_name_in_owner = true
