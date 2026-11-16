@@ -10,6 +10,14 @@
 
 using namespace godot;
 
+static void ensure_audio_buffer(Ref<AudioBuffer> &p_buf, int32_t p_frames) {
+	if (p_buf.is_null()) {
+		p_buf = AudioBuffer::create(p_frames);
+	} else if (p_buf->get_frame_count() < p_frames) {
+		p_buf->resize(p_frames);
+	}
+}
+
 // -------------------- StreamWeaverInputStream --------------------
 void StreamWeaverInputStream::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_input_name"), &StreamWeaverInputStream::GetInputName);
@@ -23,6 +31,7 @@ class StreamWeaverInputStreamRuntimeInstance : public StreamWeaverStreamRuntimeI
 public:
 	Ref<AudioStream> audio_stream;
 	Ref<AudioStreamPlayback> playback;
+	Ref<AudioBuffer> mix_buffer;
 	bool is_playing = false;
 
 	void reset() override {
@@ -51,11 +60,11 @@ public:
 			memset(p_dst_buffer, 0, sizeof(AudioFrame) * p_frames);
 			return 0;
 		}
-		auto mixed = playback->mix_audio(1.0f, p_frames);
-		int32_t num = Math::min(p_frames, static_cast<int32_t>(mixed.size()));
-		for (int i = 0; i < num; ++i) {
-			p_dst_buffer[i].left = mixed[i].x;
-			p_dst_buffer[i].right = mixed[i].y;
+		ensure_audio_buffer(mix_buffer, p_frames);
+		int32_t num = playback->mix_audio_buffer(mix_buffer, 1.0f, p_frames);
+		if (num > 0) {
+			const auto *src = reinterpret_cast<const AudioFrame *>(mix_buffer->get_data_address());
+			memcpy(p_dst_buffer, src, sizeof(AudioFrame) * num);
 		}
 		if (num < p_frames) {
 			memset(p_dst_buffer + num, 0, sizeof(AudioFrame) * (p_frames - num));
@@ -1062,12 +1071,16 @@ public:
 		trigger();
 	}
 
+	Ref<AudioBuffer> mix_buffer;
+
 	int32_t mix_output_into_buffer(AudioFrame *p_buffer, int32_t p_frames) override {
 		SpinLockGuard guard(*playback_lock);
 		if (currently_playing_inputs.is_empty()) {
 			return 0;
 		}
 		PROFILE_FUNCTION();
+		ensure_audio_buffer(mix_buffer, p_frames);
+		const auto *mixed_input = reinterpret_cast<const AudioFrame *>(mix_buffer->get_data_address());
 		size_t current_input_index = 0;
 	    float pitch = get_pitch();
 	    begin_volume_block(p_frames);
@@ -1079,14 +1092,13 @@ public:
 		        currently_playing_inputs.remove_at(current_input_index);
 		        continue;
 		    }
-			auto mixed_input = cpi.playback->mix_audio(pitch + cpi.pitch_offset, p_frames);
-		    int num_frames_mixed = Math::min( p_frames, static_cast<int32_t>( mixed_input.size() ) );
+			int num_frames_mixed = cpi.playback->mix_audio_buffer(mix_buffer, pitch + cpi.pitch_offset, p_frames);
 			if (num_frames_mixed > max_frames_mixed) {
 				max_frames_mixed = num_frames_mixed;
 			}
 			for (int i = 0; i < num_frames_mixed; i++) {
-				p_buffer[i].left += mixed_input[i].x * (volume_at(i) + cpi.volume_offset);
-				p_buffer[i].right += mixed_input[i].y * (volume_at(i) + cpi.volume_offset);
+				p_buffer[i].left += mixed_input[i].left * (volume_at(i) + cpi.volume_offset);
+				p_buffer[i].right += mixed_input[i].right * (volume_at(i) + cpi.volume_offset);
 			}
 
 			if (num_frames_mixed < p_frames) {
@@ -1131,6 +1143,7 @@ void StreamWeaverStreamLooping::_bind_methods() {
 class ParameterizedOutputLoopingRuntimeInstance : public StreamWeaverProducerRuntimeInstanceBase {
 public:
     Ref<AudioStreamPlayback> playback;
+    Ref<AudioBuffer> mix_buffer;
 
 	void trigger() override {
 	}
@@ -1155,11 +1168,12 @@ public:
 	        return 0;
 	    }
 	    float pitch = get_pitch();
-	    auto mixed_input = playback->mix_audio(pitch, p_frames);
-	    int num_frames_mixed = Math::min( p_frames, static_cast<int32_t>( mixed_input.size() ) );
+	    ensure_audio_buffer(mix_buffer, p_frames);
+	    int num_frames_mixed = playback->mix_audio_buffer(mix_buffer, pitch, p_frames);
+	    const auto *mixed_input = reinterpret_cast<const AudioFrame *>(mix_buffer->get_data_address());
 	    for (int i = 0; i < num_frames_mixed; i++) {
-	        p_buffer[i].left += mixed_input[i].x * volume_at(i);
-	        p_buffer[i].right += mixed_input[i].y * volume_at(i);
+	        p_buffer[i].left += mixed_input[i].left * volume_at(i);
+	        p_buffer[i].right += mixed_input[i].right * volume_at(i);
 	    }
 	    end_volume_block(p_frames);
         return num_frames_mixed;
@@ -2827,8 +2841,9 @@ int32_t StreamWeaverAudioStreamPlayback::_mix(AudioFrame *p_buffer, float p_rate
     master_volume_ramp_value += master_volume_ramp_step * float(p_frames);
 
     if (dummy_playback.is_valid()) {
+        ensure_audio_buffer(dummy_buffer, p_frames);
         dummy_playback->copy_src = mix_staging_buffer.ptr();
-        dummy_playback->mix_audio(1.0f, p_frames);
+        dummy_playback->mix_audio_buffer(dummy_buffer, 1.0f, p_frames);
         dummy_playback->copy_src = nullptr;
     }
 

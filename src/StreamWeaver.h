@@ -1,6 +1,7 @@
 #ifndef STREAMWEAVER_H
 #define STREAMWEAVER_H
 
+#include "godot_cpp/classes/audio_buffer.hpp"
 #include "godot_cpp/classes/audio_stream.hpp"
 #include "godot_cpp/classes/audio_stream_playback.hpp"
 #include "godot_cpp/templates/hash_map.hpp"
@@ -834,6 +835,7 @@ public:
 	[[nodiscard]] const StreamWeaverAudioStream& GetParent() const { return *parent_stream.ptr(); }
 
 	godot::Ref<class StreamWeaverDummyPlayback> dummy_playback;
+	godot::Ref<godot::AudioBuffer> dummy_buffer;
 	godot::LocalVector<godot::AudioFrame> mix_staging_buffer;
 	godot::SpinLock* get_mix_lock() { return &mix_lock; }
 
