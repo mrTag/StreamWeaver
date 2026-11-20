@@ -1068,7 +1068,6 @@ public:
 	}
 	void reset() override {
 		currently_playing_inputs.clear();
-		trigger();
 	}
 
 	Ref<AudioBuffer> mix_buffer;
@@ -2274,10 +2273,17 @@ public:
 		state = STATE_CROSSFADE;
 	}
 
+	static void start_slice(StreamWeaverStreamRuntimeInstance* slice) {
+		if (slice) {
+			slice->reset();
+			slice->trigger();
+		}
+	}
+
 	void begin_stop_transition() {
 		StreamWeaverStreamRuntimeInstance* active = active_runtime();
 		if (runtime_outro) {
-			runtime_outro->reset();
+			start_slice(runtime_outro);
 			start_crossfade(active, runtime_outro, STATE_OUTRO);
 		} else {
 			start_crossfade(active, nullptr, STATE_IDLE);
@@ -2288,14 +2294,14 @@ public:
 		if (stop_pending_flag) {
 			stop_pending_flag = false;
 			if (runtime_outro) {
-				runtime_outro->reset();
+				start_slice(runtime_outro);
 				state = STATE_OUTRO;
 				if (has_written_frame) declick_pending = true;
 			} else {
 				state = STATE_IDLE;
 			}
 		} else if (runtime_loop) {
-			runtime_loop->reset();
+			start_slice(runtime_loop);
 			state = STATE_LOOP;
 			if (has_written_frame) declick_pending = true;
 		} else {
@@ -2308,10 +2314,10 @@ public:
 			if (state == STATE_IDLE) {
 				stop_pending_flag = false;
 				if (runtime_intro) {
-					runtime_intro->reset();
+					start_slice(runtime_intro);
 					state = STATE_INTRO;
 				} else if (runtime_loop) {
-					runtime_loop->reset();
+					start_slice(runtime_loop);
 					state = STATE_LOOP;
 				} else {
 					state = STATE_IDLE;
@@ -2327,7 +2333,7 @@ public:
 					StreamWeaverStreamRuntimeInstance* target = runtime_intro ? runtime_intro : runtime_loop;
 					State target_state = runtime_intro ? STATE_INTRO : STATE_LOOP;
 					if (target) {
-						target->reset();
+						start_slice(target);
 						start_crossfade(active_runtime(), target, target_state, 0.02f);
 					}
 				}
@@ -2335,7 +2341,7 @@ public:
 				StreamWeaverStreamRuntimeInstance* target = runtime_intro ? runtime_intro : runtime_loop;
 				State target_state = runtime_intro ? STATE_INTRO : STATE_LOOP;
 				if (target) {
-					target->reset();
+					start_slice(target);
 					start_crossfade(runtime_outro, target, target_state, 0.02f);
 				}
 			}
@@ -2378,13 +2384,13 @@ public:
 						if (stop_pending_flag) {
 							stop_pending_flag = false;
 							if (runtime_outro) {
-								runtime_outro->reset();
+								start_slice(runtime_outro);
 								start_crossfade(runtime_intro, runtime_outro, STATE_OUTRO);
 							} else {
 								start_crossfade(runtime_intro, nullptr, STATE_IDLE);
 							}
 						} else if (runtime_loop) {
-							runtime_loop->reset();
+							start_slice(runtime_loop);
 							start_crossfade(runtime_intro, runtime_loop, STATE_LOOP);
 						} else {
 							start_crossfade(runtime_intro, nullptr, STATE_IDLE);
